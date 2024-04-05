@@ -21,6 +21,9 @@ import static org.apache.hadoop.hbase.HConstants.BUCKET_CACHE_IOENGINE_KEY;
 import static org.apache.hadoop.hbase.HConstants.BUCKET_CACHE_SIZE_KEY;
 import static org.apache.hadoop.hbase.io.ByteBuffAllocator.HEAP;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.nio.ByteBuffer;
 import org.apache.hadoop.conf.Configuration;
@@ -154,10 +157,10 @@ public class TestCombinedBlockCache {
       ByteBuff.wrap(ByteBuffer.wrap(byteArr, 0, size)), HFileBlock.FILL_HEADER, -1, 52, -1, meta,
       HEAP);
     blockCache.cacheBlock(key, blk);
-    blockCache.getBlock(key, true, false, true);
+    assertNotNull(blockCache.getBlock(key, true, false, true));
     assertEquals(0, blockCache.getStats().getMissCount());
-    blockCache.evictBlock(key);
-    blockCache.getBlock(key, true, false, true);
+    assertTrue(blockCache.evictBlock(key));
+    assertNull(blockCache.getBlock(key, true, false, true));
     assertEquals(1, blockCache.getStats().getMissCount());
     assertEquals(expectedL1Miss, blockCache.getFirstLevelCache().getStats().getMissCount());
     assertEquals(expectedL2Miss, blockCache.getSecondLevelCache().getStats().getMissCount());
