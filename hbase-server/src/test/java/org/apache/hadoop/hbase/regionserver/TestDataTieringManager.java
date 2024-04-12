@@ -31,7 +31,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseClassTestRule;
-import org.apache.hadoop.hbase.HBaseTestingUtil;
+import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.ColumnFamilyDescriptor;
@@ -82,7 +82,7 @@ public class TestDataTieringManager {
   public static final HBaseClassTestRule CLASS_RULE =
     HBaseClassTestRule.forClass(TestDataTieringManager.class);
 
-  private static final HBaseTestingUtil TEST_UTIL = new HBaseTestingUtil();
+  private static final HBaseTestingUtility TEST_UTIL = new HBaseTestingUtility();
   private static Configuration defaultConf;
   private static FileSystem fs;
   private static CacheConfig cacheConf;
