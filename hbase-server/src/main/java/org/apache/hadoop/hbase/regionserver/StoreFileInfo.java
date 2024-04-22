@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -47,7 +48,7 @@ import org.slf4j.LoggerFactory;
  * Describe a StoreFile (hfile, reference, link)
  */
 @InterfaceAudience.Private
-public class StoreFileInfo {
+public class StoreFileInfo implements Configurable {
   private static final Logger LOG = LoggerFactory.getLogger(StoreFileInfo.class);
 
   /**
@@ -75,7 +76,7 @@ public class StoreFileInfo {
   public static final boolean DEFAULT_STORE_FILE_READER_NO_READAHEAD = false;
 
   // Configuration
-  private final Configuration conf;
+  private Configuration conf;
 
   // FileSystem handle
   private final FileSystem fs;
@@ -673,8 +674,14 @@ public class StoreFileInfo {
     return this.fs;
   }
 
-  Configuration getConf() {
+  @Override
+  public Configuration getConf() {
     return this.conf;
+  }
+
+  @Override
+  public void setConf(Configuration conf) {
+    this.conf = conf;
   }
 
   boolean isNoReadahead() {

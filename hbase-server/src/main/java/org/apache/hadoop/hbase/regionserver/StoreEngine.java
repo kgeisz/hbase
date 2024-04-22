@@ -258,6 +258,9 @@ public abstract class StoreEngine<SF extends StoreFlusher, CP extends Compaction
 
     int totalValidStoreFile = 0;
     for (StoreFileInfo storeFileInfo : files) {
+      // The StoreFileInfo will carry store configuration down to HFile, we need to set it to
+      // our store's CompoundConfiguration here.
+      storeFileInfo.setConf(conf);
       // open each store file in parallel
       completionService.submit(() -> createStoreFileAndReader(storeFileInfo));
       totalValidStoreFile++;
