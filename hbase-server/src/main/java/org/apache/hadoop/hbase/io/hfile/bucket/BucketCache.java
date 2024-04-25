@@ -1096,6 +1096,7 @@ public class BucketCache implements BlockCache, HeapSize {
       }
       long bytesToFreeWithExtra =
         (long) Math.floor(bytesToFreeWithoutExtra * (1 + extraFreeFactor));
+
       // Instantiate priority buckets
       BucketEntryGroup bucketSingle =
         new BucketEntryGroup(bytesToFreeWithExtra, blockSize, getPartitionSize(singleFactor));
@@ -1110,6 +1111,16 @@ public class BucketCache implements BlockCache, HeapSize {
       if (onlineRegions != null) {
         allValidFiles = BlockCacheUtil.listAllFilesNames(onlineRegions);
       }
+
+      // Check the list of files to determine the cold files which can be readily evicted.
+      Map<String, String> coldFiles = null;
+      try {
+        DataTieringManager dataTieringManager = DataTieringManager.getInstance();
+        coldFiles = dataTieringManager.getColdFilesList();
+      } catch (IllegalStateException e) {
+        LOG.warn("Data Tiering Manager is not set. Ignore time-based block evictions.");
+      }
+
       // the cached time is recored in nanos, so we need to convert the grace period accordingly
       long orphanGracePeriodNanos = orphanBlockGracePeriod * 1000000;
       long bytesFreed = 0;
@@ -1145,6 +1156,17 @@ public class BucketCache implements BlockCache, HeapSize {
             }
           }
         }
+
+        if (bytesFreed < bytesToFreeWithExtra &&
+          coldFiles != null && coldFiles.containsKey(bucketEntryWithKey.getKey().getHfileName())
+        ) {
+          int freedBlockSize = bucketEntryWithKey.getValue().getLength();
+          if (evictBlockIfNoRpcReferenced(bucketEntryWithKey.getKey())) {
+            bytesFreed += freedBlockSize;
+          }
+          continue;
+        }
+
         switch (entry.getPriority()) {
           case SINGLE: {
             bucketSingle.add(bucketEntryWithKey);
@@ -1160,6 +1182,22 @@ public class BucketCache implements BlockCache, HeapSize {
           }
         }
       }
+
+      // Check if the cold file eviction is sufficient to create enough space.
+      bytesToFreeWithExtra -= bytesFreed;
+      if (bytesToFreeWithExtra <= 0) {
+        LOG.debug("Bucket cache free space completed; freed space : {} bytes of cold data blocks.",
+          StringUtils.byteDesc(bytesFreed));
+        return;
+      }
+
+      if (LOG.isDebugEnabled()) {
+        LOG.debug(
+          "Bucket cache free space completed; freed space : {} "
+            + "bytes of cold data blocks. {} more bytes required to be freed.",
+          StringUtils.byteDesc(bytesFreed), bytesToFreeWithExtra);
+      }
+
       PriorityQueue<BucketEntryGroup> bucketQueue =
         new PriorityQueue<>(3, Comparator.comparingLong(BucketEntryGroup::overflow));
 
