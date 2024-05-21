@@ -1,0 +1,15 @@
+name: GATEKEEPING_TICKET_VALIDATOR
+on:
+  issue_comment:
+      types: [created, edited]
+  pull_request:
+      types: [opened, edited, reopened, synchronize]
+
+jobs:
+  validator:
+     uses: Kitchen/gatekeeping-common/.github/workflows/gatekeeping_start.yaml@master
+     with:
+       start_keyword: 'gate-ticket'
+       labels: "gk-ticket-validation-fail,gk-ticket-validation-pass"
+       gk_source_repo: "Kitchen/gatekeeping-ticket-validator"
+       gk_action: "ticket_validator"

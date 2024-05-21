@@ -1,0 +1,10 @@
+name: GATEKEEPING_VERIFY_LABELS
+on:
+  pull_request_target:
+    types: [labeled, synchronize]
+
+jobs:
+  verify_labels:
+     uses: Kitchen/gatekeeping-common/.github/workflows/verify_labels.yaml@master
+     with:
+      required_labels: "gk-ticket-validation-pass"
