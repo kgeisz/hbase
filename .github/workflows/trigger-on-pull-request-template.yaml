@@ -1,0 +1,7 @@
+name: Run tests via pull-request template
+on:
+  pull_request:
+    types: [opened, synchronize, edited, labeled]
+jobs:
+  TRIGGER-TESTS:
+    uses: Kitchen/RE-github-workflows/.github/workflows/trigger-on-prt-unified-branch.yaml@main
