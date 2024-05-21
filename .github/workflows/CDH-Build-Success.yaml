@@ -1,0 +1,9 @@
+name: SUCCESS-STATE
+on:
+  pull_request:
+    types: [labeled]
+jobs:
+  SUCCESS-STATE:
+    uses: Kitchen/RE-github-workflows/.github/workflows/cdh-builds-success-state.yaml@main
+    with:
+      required_labels: "ci-build-pass,smoketest-pass,precommit-tier-tests-pass"
