@@ -1,0 +1,6 @@
+name: BUILD
+on:
+  pull_request:
+jobs:
+  BUILD:
+    uses: Kitchen/RE-github-workflows/.github/workflows/CI_CDPD_BUILD.yaml@main
