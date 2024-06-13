@@ -74,7 +74,8 @@ public class DataTieringManager {
       LOG.info("DataTieringManager instantiated successfully.");
       return true;
     } else {
-      LOG.warn("DataTieringManager is already instantiated.");
+      LOG.warn(
+        "DataTieringManager is " + ((instance == null) ? "disabled." : "already instantiated."));
     }
     return false;
   }
