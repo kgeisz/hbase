@@ -42,7 +42,7 @@ import org.apache.yetus.audience.InterfaceAudience;
 public class DateTieredStoreEngine extends StoreEngine<DefaultStoreFlusher,
   DateTieredCompactionPolicy, DateTieredCompactor, DefaultStoreFileManager> {
 
-  public static final String DATE_TIERED_STORE_ENGINE = DateTieredStoreEngine.class.getName();
+  public static final String DATE_TIERED_STORE_ENGINE = DateTieredStoreEngine.class.getSimpleName();
 
   @Override
   public boolean needsCompaction(List<HStoreFile> filesCompacting) {

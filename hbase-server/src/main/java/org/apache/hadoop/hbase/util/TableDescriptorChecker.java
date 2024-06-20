@@ -241,7 +241,8 @@ public final class TableDescriptorChecker {
       // Determine whether Date Tiered Compaction will be enabled when Time Range Data Tiering is
       // enabled after the configuration change.
       if (DataTieringType.TIME_RANGE.name().equals(conf.get(DataTieringManager.DATATIERING_KEY))) {
-        if (!DATE_TIERED_STORE_ENGINE.equals(conf.get(StoreEngine.STORE_ENGINE_CLASS_KEY))) {
+        String storeEngineClass = conf.get(StoreEngine.STORE_ENGINE_CLASS_KEY);
+        if (storeEngineClass == null || !storeEngineClass.contains(DATE_TIERED_STORE_ENGINE)) {
           throw new IllegalArgumentException(errorMessage);
         }
       }
