@@ -264,7 +264,7 @@ public class StoreFileInfo {
     return this.hdfsBlocksDistribution;
   }
 
-  StoreFileReader createReader(ReaderContext context, CacheConfig cacheConf) throws IOException {
+  public StoreFileReader createReader(ReaderContext context, CacheConfig cacheConf) throws IOException {
     StoreFileReader reader = null;
     if (this.reference != null) {
       reader = new HalfStoreFileReader(context, hfileInfo, cacheConf, reference, refCount, conf);
@@ -674,7 +674,7 @@ public class StoreFileInfo {
     return this.noReadahead;
   }
 
-  HFileInfo getHFileInfo() {
+  public HFileInfo getHFileInfo() {
     return hfileInfo;
   }
 
