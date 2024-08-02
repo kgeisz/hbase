@@ -2545,6 +2545,26 @@ Copyright (c) 2011 FuseSource Corp. All rights reserved.
       </licenses>
     </project>
   </supplement>
+  <supplement>
+    <project>
+      <groupId>org.fusesource</groupId>
+      <artifactId>leveldbjni-cldr</artifactId>
+      <licenses>
+        <license>
+          <!-- Original license text substituted "FuseSource Corp." for "the copyright holder"
+               in the original 3-Clause license. Since their pom linked directly to the standard
+               3-Clause text, we're grouping them with the others.
+          -->
+          <name>BSD 3-Clause License</name>
+          <url>http://www.opensource.org/licenses/BSD-3-Clause</url>
+          <distribution>repo</distribution>
+          <comments>
+            Copyright (c) 2011 FuseSource Corp. All rights reserved.
+          </comments>
+        </license>
+      </licenses>
+    </project>
+  </supplement>
 <!-- Category B licenses that need text in LICENSE and a NOTICE -->
   <supplement>
     <project>
