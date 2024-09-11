@@ -37,11 +37,20 @@
 # hbase hacking.
 include Java
 
+# Required to access JRuby-specific internal features, such as `JRuby.runtime`
+# Loading 'java' was automatically loading 'jruby' until JRuby 9.2.
+# But, it has changed since JRuby 9.3. JRuby 9.3+ needs loading 'jruby' explicitly.
+#
+# See also: https://github.com/jruby/jruby/issues/7221#issuecomment-1133646241
+#
+require 'jruby'
+
 # Some goodies for hirb. Should these be left up to the user's discretion?
 if $stdin.tty?
   require 'irb/completion'
 end
 require 'pathname'
+require 'getoptlong'
 
 # Add the directory names in hbase.jruby.sources commandline option
 # to the ruby load path so I can load up my HBase ruby modules
@@ -52,11 +61,6 @@ unless sources.nil?
   $LOAD_PATH.unshift Pathname.new(sources)
 end
 
-#
-# FIXME: Switch args processing to getopt
-#
-# See if there are args for this shell. If any, read and then strip from ARGV
-# so they don't go through to irb.  Output shell 'usage' if user types '--help'
 cmdline_help = <<HERE # HERE document output as shell usage
 Usage: shell [OPTIONS] [SCRIPTFILE [ARGUMENTS]]
 
@@ -64,6 +68,8 @@ Usage: shell [OPTIONS] [SCRIPTFILE [ARGUMENTS]]
  -h | --help             This help.
  -n | --noninteractive   Do not run within an IRB session and exit with non-zero
                          status on first error.
+ -c | --colorize         Enable colorized output.
+ -a | --autocomplete     Enable auto-completion.
  --top-level-defs        Compatibility flag to export HBase shell commands onto
                          Ruby's main object
  -Dkey=value             Pass hbase-*.xml Configuration overrides. For example, to
@@ -84,54 +90,68 @@ def add_to_configuration(c, arg)
   c
 end
 
-found = []
+conf_from_cli = nil
+
+# strip out any config definitions that won't work with GetoptLong
+D_ARG = '-D'.freeze
+ARGV.delete_if do |arg|
+  if arg.start_with?(D_ARG) && arg.include?('=')
+    conf_from_cli = add_to_configuration(conf_from_cli, arg[2..-1])
+    true
+  else
+    false
+  end
+end
+
+opts = GetoptLong.new(
+  ['--help', '-h', GetoptLong::NO_ARGUMENT],
+  ['--debug', '-d', GetoptLong::NO_ARGUMENT],
+  ['--noninteractive', '-n', GetoptLong::NO_ARGUMENT],
+  ['--colorize', '-c', GetoptLong::NO_ARGUMENT],
+  ['--autocomplete', '-a', GetoptLong::NO_ARGUMENT],
+  ['--top-level-defs', GetoptLong::NO_ARGUMENT],
+  ['-D', GetoptLong::REQUIRED_ARGUMENT],
+  ['--return-values', '-r', GetoptLong::NO_ARGUMENT]
+)
+opts.ordering = GetoptLong::REQUIRE_ORDER
+
 script2run = nil
 log_level = org.apache.log4j.Level::ERROR
 @shell_debug = false
 interactive = true
+colorize = false
+autocomplete = false
 full_backtrace = false
 top_level_definitions = false
-_configuration = nil
-D_ARG = '-D'.freeze
-while (arg = ARGV.shift)
-  if arg == '-h' || arg == '--help'
+
+opts.each do |opt, arg|
+  case opt
+  when '--help'
     puts cmdline_help
     exit
-  elsif arg == D_ARG
-    argValue = ARGV.shift || (raise "#{D_ARG} takes a 'key=value' parameter")
-    _configuration = add_to_configuration(_configuration, argValue)
-    found.push(arg)
-    found.push(argValue)
-  elsif arg.start_with? D_ARG
-    _configuration = add_to_configuration(_configuration, arg[2..-1])
-    found.push(arg)
-  elsif arg == '-d' || arg == '--debug'
+  when D_ARG
+    conf_from_cli = add_to_configuration(conf_from_cli, arg)
+  when '--debug'
     log_level = org.apache.log4j.Level::DEBUG
     full_backtrace = true
     @shell_debug = true
-    found.push(arg)
     puts 'Setting DEBUG log level...'
-  elsif arg == '-n' || arg == '--noninteractive'
+  when '--noninteractive'
     interactive = false
-    found.push(arg)
-  elsif arg == '-r' || arg == '--return-values'
+  when '--colorize'
+    colorize = true
+  when '--autocomplete'
+    autocomplete = true
+  when '--return-values'
     warn '[INFO] the -r | --return-values option is ignored. we always behave '\
-         'as though it was given.'
-    found.push(arg)
-  elsif arg == '--top-level-defs'
+           'as though it was given.'
+  when '--top-level-defs'
     top_level_definitions = true
-  else
-    # Presume it a script. Save it off for running later below
-    # after we've set up some environment.
-    script2run = arg
-    found.push(arg)
-    # Presume that any other args are meant for the script.
-    break
   end
 end
 
-# Delete all processed args
-found.each { |arg| ARGV.delete(arg) }
+script2run = ARGV.shift unless ARGV.empty?
+
 # Make sure debug flag gets back to IRB
 ARGV.unshift('-d') if @shell_debug
 
@@ -149,7 +169,7 @@ require 'hbase_shell'
 require 'shell/formatter'
 
 # Setup the HBase module.  Create a configuration.
-@hbase = _configuration.nil? ? Hbase::Hbase.new : Hbase::Hbase.new(_configuration)
+@hbase = conf_from_cli.nil? ? Hbase::Hbase.new : Hbase::Hbase.new(conf_from_cli)
 
 # Setup console
 @shell = Shell::Shell.new(@hbase, interactive)
@@ -203,6 +223,8 @@ IRB.conf[:IRB_NAME] = 'hbase'
 IRB.conf[:AP_NAME] = 'hbase'
 IRB.conf[:PROMPT_MODE] = :CUSTOM
 IRB.conf[:BACK_TRACE_LIMIT] = 0 unless full_backtrace
+IRB.conf[:USE_AUTOCOMPLETE] = autocomplete
+IRB.conf[:USE_COLORIZE] = colorize
 
 # Create a workspace we'll use across sessions.
 workspace = @shell.get_workspace
