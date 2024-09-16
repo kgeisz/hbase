@@ -31,6 +31,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
@@ -229,7 +230,7 @@ public class TestAsyncProcess {
 
     @Override
     protected RpcRetryingCaller<AbstractResponse>
-      createCaller(CancellableRegionServerCallable callable, int rpcTimeout) {
+    createCaller(CancellableRegionServerCallable callable, int rpcTimeout) {
       callsCt.incrementAndGet();
       MultiServerCallable callable1 = (MultiServerCallable) callable;
       final MultiResponse mr = createMultiResponse(callable1.getMulti(), nbMultiResponse, nbActions,
@@ -316,19 +317,66 @@ public class TestAsyncProcess {
     }
   }
 
+  /**
+   * Used to simulate the case where a RegionServer responds to a multi request, but some or all of
+   * the actions have an Exception instead of Result. These responses go through receiveMultiAction,
+   * which has handling for individual action failures.
+   */
+  static class CallerWithRegionException extends RpcRetryingCallerImpl<AbstractResponse> {
+
+    private final IOException e;
+    private MultiAction multi;
+
+    public CallerWithRegionException(IOException e, MultiAction multi) {
+      super(100, 500, 100, RetryingCallerInterceptorFactory.NO_OP_INTERCEPTOR, 9, 0);
+      this.e = e;
+      this.multi = multi;
+    }
+
+    @Override
+    public AbstractResponse callWithoutRetries(RetryingCallable<AbstractResponse> callable,
+      int callTimeout) throws IOException, RuntimeException {
+      MultiResponse response = new MultiResponse();
+      for (Entry<byte[], List<Action>> entry : multi.actions.entrySet()) {
+        response.addException(entry.getKey(), e);
+      }
+      return response;
+    }
+  }
+
   static class AsyncProcessWithFailure extends MyAsyncProcess {
 
     private final IOException ioe;
+    private final ServerName failingServer;
+    private final boolean returnAsRegionException;
 
-    public AsyncProcessWithFailure(ClusterConnection hc, Configuration conf, IOException ioe) {
-      super(hc, conf);
+    public AsyncProcessWithFailure(ClusterConnection hc, Configuration myConf, IOException ioe,
+      ServerName failingServer, boolean returnAsRegionException) {
+      super(hc, myConf);
       this.ioe = ioe;
+      this.failingServer = failingServer;
+      this.returnAsRegionException = returnAsRegionException;
       serverTrackerTimeout = 1L;
+    }
+
+    public AsyncProcessWithFailure(ClusterConnection hc, Configuration myConf, IOException ioe) {
+      this(hc, myConf, ioe, null, false);
     }
 
     @Override
     protected RpcRetryingCaller<AbstractResponse>
-      createCaller(CancellableRegionServerCallable callable, int rpcTimeout) {
+    createCaller(CancellableRegionServerCallable callable, int rpcTimeout) {
+      MultiServerCallable msc = (MultiServerCallable) callable;
+      if (failingServer != null) {
+        if (!msc.getServerName().equals(failingServer)) {
+          return super.createCaller(callable, rpcTimeout);
+        }
+      }
+
+      if (returnAsRegionException) {
+        return new CallerWithRegionException(ioe, msc.getMulti());
+      }
+
       callsCt.incrementAndGet();
       return new CallerWithFailure(ioe);
     }
@@ -382,7 +430,7 @@ public class TestAsyncProcess {
 
     @Override
     protected RpcRetryingCaller<AbstractResponse>
-      createCaller(CancellableRegionServerCallable payloadCallable, int rpcTimeout) {
+    createCaller(CancellableRegionServerCallable payloadCallable, int rpcTimeout) {
       MultiServerCallable callable = (MultiServerCallable) payloadCallable;
       final MultiResponse mr = createMultiResponse(callable.getMulti(), nbMultiResponse, nbActions,
         new ResponseGenerator() {
@@ -1732,14 +1780,35 @@ public class TestAsyncProcess {
     Assert.assertTrue("Slept for too long: " + actualSleep + "ms", actualSleep <= expectedSleep);
   }
 
+  /**
+   * Tests that we properly recover from exceptions that DO NOT go through receiveGlobalFailure, due
+   * to updating the meta cache for the region which failed. Successful multigets can include region
+   * exceptions in the MultiResponse. In that case, it skips receiveGlobalFailure and instead
+   * handles in receiveMultiAction
+   */
   @Test
-  public void testRetryWithExceptionClearsMetaCache() throws Exception {
-    ClusterConnection conn = createHConnection();
-    Configuration myConf = conn.getConfiguration();
-    myConf.setInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER, 0);
+  public void testRetryWithExceptionClearsMetaCacheUsingRegionException() throws Exception {
+    testRetryWithExceptionClearsMetaCache(true);
+  }
 
-    AsyncProcessWithFailure ap =
-      new AsyncProcessWithFailure(conn, myConf, new RegionOpeningException("test"));
+  /**
+   * Tests that we properly recover from exceptions that go through receiveGlobalFailure, due to
+   * updating the meta cache for the region which failed.
+   */
+  @Test
+  public void testRetryWithExceptionClearsMetaCacheUsingServerException() throws Exception {
+    testRetryWithExceptionClearsMetaCache(false);
+  }
+
+  private void testRetryWithExceptionClearsMetaCache(boolean useRegionException)
+    throws IOException {
+    Configuration myConf = new Configuration(CONF);
+    myConf.setInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER, 1);
+    ClusterConnection conn = createHConnection();
+
+    // we pass in loc1.getServerName here so that only calls to that server will fail
+    AsyncProcessWithFailure ap = new AsyncProcessWithFailure(conn, myConf,
+      new RegionOpeningException("test"), loc1.getServerName(), useRegionException);
     BufferedMutatorParams bufferParam = createBufferedMutatorParams(ap, DUMMY_TABLE);
     BufferedMutatorImpl mutator = new BufferedMutatorImpl(conn, bufferParam, ap);
 
@@ -1748,20 +1817,33 @@ public class TestAsyncProcess {
     Assert.assertEquals(conn.locateRegion(DUMMY_TABLE, DUMMY_BYTES_1, true, true).toString(),
       new RegionLocations(loc1).toString());
 
-    Mockito.verify(conn, Mockito.times(0)).clearCaches(Mockito.any());
+    // simulate updateCachedLocations, by changing the loc for this row to loc3. only loc1 fails,
+    // so this means retry will succeed
+    Mockito.doAnswer(invocation -> {
+      setMockLocation(conn, DUMMY_BYTES_1, new RegionLocations(loc3));
+      return null;
+    }).when(conn).updateCachedLocations(Mockito.eq(DUMMY_TABLE),
+      Mockito.eq(loc1.getRegion().getRegionName()), Mockito.eq(DUMMY_BYTES_1), Mockito.any(),
+      Mockito.eq(loc1.getServerName()));
+
+    // Ensure we haven't called updateCachedLocations yet
+    Mockito.verify(conn, Mockito.times(0)).updateCachedLocations(Mockito.any(), Mockito.any(),
+      Mockito.any(), Mockito.any(), Mockito.any());
 
     Put p = createPut(1, true);
     mutator.mutate(p);
 
-    try {
-      mutator.flush();
-      Assert.fail();
-    } catch (RetriesExhaustedWithDetailsException expected) {
-      assertEquals(1, expected.getNumExceptions());
-      assertTrue(expected.getRow(0) == p);
-    }
+    // we expect this to succeed because the bad region location should be updated upon
+    // the initial failure causing retries to succeed.
+    mutator.flush();
 
-    Mockito.verify(conn, Mockito.times(1)).clearCaches(loc1.getServerName());
+    // validate that we updated the location, as we expected
+    Assert.assertEquals(conn.locateRegion(DUMMY_TABLE, DUMMY_BYTES_1, true, true).toString(),
+      new RegionLocations(loc3).toString());
+    // this is a given since the location updated, but validate that we called updateCachedLocations
+    Mockito.verify(conn, Mockito.atLeastOnce()).updateCachedLocations(Mockito.eq(DUMMY_TABLE),
+      Mockito.eq(loc1.getRegion().getRegionName()), Mockito.eq(DUMMY_BYTES_1), Mockito.any(),
+      Mockito.eq(loc1.getServerName()));
   }
 
   @Test
