@@ -381,6 +381,7 @@ public class HalfStoreFileReader extends StoreFileReader {
               reference, referred, top, numEvictedReferred, numEvictedReference);
           });
         }
+        s.close();
         reader.close(false);
       } else {
         reader.close(evictOnClose);
