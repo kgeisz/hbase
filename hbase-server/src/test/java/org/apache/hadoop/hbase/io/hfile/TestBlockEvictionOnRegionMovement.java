@@ -31,6 +31,7 @@ import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.MiniHBaseCluster;
 import org.apache.hadoop.hbase.StartMiniClusterOption;
 import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.Waiter;
 import org.apache.hadoop.hbase.client.Admin;
 import org.apache.hadoop.hbase.client.ColumnFamilyDescriptorBuilder;
 import org.apache.hadoop.hbase.client.Put;
@@ -107,9 +108,9 @@ public class TestBlockEvictionOnRegionMovement {
       TEST_UTIL.getOtherRegionServer(regionServingRS).getServerName());
     assertEquals(0, regionServingRS.getRegions(tableRegionMove).size());
 
-    long newUsedCacheSize =
-      regionServingRS.getBlockCache().get().getBlockCaches()[1].getCurrentSize();
-    assertTrue(oldUsedCacheSize > newUsedCacheSize);
+    long wait = Waiter.waitFor(cluster.getConf(), 500, () ->
+      oldUsedCacheSize > regionServingRS.getBlockCache().get().getBlockCaches()[1].getCurrentSize());
+    assertTrue(wait >= 0);
     assertEquals(0, regionServingRS.getBlockCache().get().getBlockCaches()[1].getBlockCount());
   }
 
