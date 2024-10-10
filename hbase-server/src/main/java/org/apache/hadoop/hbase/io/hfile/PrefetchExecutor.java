@@ -130,14 +130,7 @@ public final class PrefetchExecutor {
     }
   }
 
-  public static void interrupt(Path path) {
-    Future<?> future = prefetchFutures.get(path);
-    if (future != null) {
-      prefetchFutures.remove(path);
-      // ok to race with other cancellation attempts
-      future.cancel(true);
-      LOG.debug("Prefetch cancelled for {}", path);
-    }
+  private PrefetchExecutor() {
   }
 
   public static boolean isCompleted(Path path) {
@@ -146,9 +139,6 @@ public final class PrefetchExecutor {
       return future.isDone();
     }
     return true;
-  }
-
-  private PrefetchExecutor() {
   }
 
   /* Visible for testing only */
@@ -197,10 +187,18 @@ public final class PrefetchExecutor {
     prefetchFutures.forEach((k, v) -> {
       ScheduledFuture sf = (ScheduledFuture) prefetchFutures.get(k);
       if (!(sf.getDelay(TimeUnit.MILLISECONDS) > 0)) {
-        // the thread is still pending delay expiration and has not started to run yet, so can be
-        // re-scheduled at no cost.
-        interrupt(k);
-        request(k, prefetchRunnable.get(k));
+        Runnable runnable = prefetchRunnable.get(k);
+        Future<?> future = prefetchFutures.get(k);
+        if (future != null) {
+          prefetchFutures.remove(k);
+          // ok to race with other cancellation attempts
+          boolean canceled = future.cancel(true);
+          LOG.debug("Prefetch {} for {}",
+            canceled ? "cancelled" : "cancel attempted but it was already finished", k);
+        }
+        if (runnable != null && future != null && future.isCancelled()) {
+          request(k, runnable);
+        }
       }
       LOG.debug("Reset called on Prefetch of file {} with delay {}, delay variation {}", k,
         prefetchDelayMillis, prefetchDelayVariation);
