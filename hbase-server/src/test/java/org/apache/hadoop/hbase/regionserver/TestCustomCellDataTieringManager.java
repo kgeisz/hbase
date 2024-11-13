@@ -61,7 +61,6 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.CacheTestUtils;
 import org.apache.hadoop.hbase.io.hfile.HFileBlock;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
-import org.apache.hadoop.hbase.io.hfile.TestPrefetchWithBucketCache;
 import org.apache.hadoop.hbase.io.hfile.bucket.BucketCache;
 import org.apache.hadoop.hbase.testclassification.RegionServerTests;
 import org.apache.hadoop.hbase.testclassification.SmallTests;
@@ -78,30 +77,30 @@ import org.slf4j.LoggerFactory;
 /**
  * This class is used to test the functionality of the DataTieringManager.
  *
- * The mock online regions are stored in {@link TestDataTieringManager#testOnlineRegions}.
- * For all tests, the setup of {@link TestDataTieringManager#testOnlineRegions} occurs only once.
- * Please refer to {@link TestDataTieringManager#setupOnlineRegions()} for the structure.
- * Additionally, a list of all store files is maintained in {@link TestDataTieringManager#hStoreFiles}.
+ * The mock online regions are stored in {@link TestCustomCellDataTieringManager#testOnlineRegions}.
+ * For all tests, the setup of {@link TestCustomCellDataTieringManager#testOnlineRegions} occurs only once.
+ * Please refer to {@link TestCustomCellDataTieringManager#setupOnlineRegions()} for the structure.
+ * Additionally, a list of all store files is maintained in {@link TestCustomCellDataTieringManager#hStoreFiles}.
  * The characteristics of these store files are listed below:
  * @formatter:off ## HStoreFile Information
  *
  * | HStoreFile       | Region             | Store               | DataTiering           | isHot |
  * |------------------|--------------------|---------------------|-----------------------|-------|
- * | hStoreFile0      | region1            | hStore11            | TIME_RANGE            | true  |
+ * | hStoreFile0      | region1            | hStore11            | CUSTOM_CELL_VALUE     | true  |
  * | hStoreFile1      | region1            | hStore12            | NONE                  | true  |
- * | hStoreFile2      | region2            | hStore21            | TIME_RANGE            | true  |
- * | hStoreFile3      | region2            | hStore22            | TIME_RANGE            | false |
+ * | hStoreFile2      | region2            | hStore21            | CUSTOM_CELL_VALUE     | true  |
+ * | hStoreFile3      | region2            | hStore22            | CUSTOM_CELL_VALUE     | false |
  * @formatter:on
  */
 
 @Category({ RegionServerTests.class, SmallTests.class })
-public class TestDataTieringManager {
+public class TestCustomCellDataTieringManager {
 
   @ClassRule
   public static final HBaseClassTestRule CLASS_RULE =
-    HBaseClassTestRule.forClass(TestDataTieringManager.class);
+    HBaseClassTestRule.forClass(TestCustomCellDataTieringManager.class);
 
-  private static final Logger LOG = LoggerFactory.getLogger(TestDataTieringManager.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestCustomCellDataTieringManager.class);
   private static final HBaseTestingUtility TEST_UTIL = new HBaseTestingUtility();
   private static final long DAY = 24 * 60 * 60 * 1000;
   private static Configuration defaultConf;
@@ -123,7 +122,7 @@ public class TestDataTieringManager {
 
   @BeforeClass
   public static void setupBeforeClass() throws Exception {
-    testDir = TEST_UTIL.getDataTestDir(TestDataTieringManager.class.getSimpleName());
+    testDir = TEST_UTIL.getDataTestDir(TestCustomCellDataTieringManager.class.getSimpleName());
     defaultConf = TEST_UTIL.getConfiguration();
     updateCommonConfigurations();
     assertTrue(DataTieringManager.instantiate(defaultConf, testOnlineRegions));
@@ -294,7 +293,7 @@ public class TestDataTieringManager {
     setCacheCompactBlocksOnWrite();
     initializeTestEnvironment();
 
-    HRegion region = createHRegion("table3", getConfWithTimeRangeDataTieringEnabled(5 * DAY));
+    HRegion region = createHRegion("table3", getConfWithCustomCellDataTieringEnabled(5 * DAY));
     testCacheCompactedBlocksOnWrite(region, true);
   }
 
@@ -303,7 +302,7 @@ public class TestDataTieringManager {
     setCacheCompactBlocksOnWrite();
     initializeTestEnvironment();
 
-    HRegion region = createHRegion("table3", getConfWithTimeRangeDataTieringEnabled(DAY));
+    HRegion region = createHRegion("table3", getConfWithCustomCellDataTieringEnabled(DAY));
     testCacheCompactedBlocksOnWrite(region, false);
   }
 
@@ -707,7 +706,7 @@ public class TestDataTieringManager {
 
     HRegion region1 = createHRegion("table1");
 
-    HStore hStore11 = createHStore(region1, "cf1", getConfWithTimeRangeDataTieringEnabled(day));
+    HStore hStore11 = createHStore(region1, "cf1", getConfWithCustomCellDataTieringEnabled(day));
     hStoreFiles.add(createHStoreFile(hStore11.getStoreContext().getFamilyStoreDirectoryPath(),
       hStore11.getReadOnlyConfiguration(), currentTime));
     hStore11.refreshStoreFiles();
@@ -720,7 +719,7 @@ public class TestDataTieringManager {
     region1.stores.put(Bytes.toBytes("cf2"), hStore12);
 
     HRegion region2 =
-      createHRegion("table2", getConfWithTimeRangeDataTieringEnabled((long) (2.5 * day)));
+      createHRegion("table2", getConfWithCustomCellDataTieringEnabled((long) (2.5 * day)));
 
     HStore hStore21 = createHStore(region2, "cf1");
     hStoreFiles.add(createHStoreFile(hStore21.getStoreContext().getFamilyStoreDirectoryPath(),
@@ -785,9 +784,9 @@ public class TestDataTieringManager {
     return new HStore(region, columnFamilyDescriptor, conf, false);
   }
 
-  private static Configuration getConfWithTimeRangeDataTieringEnabled(long hotDataAge) {
+  private static Configuration getConfWithCustomCellDataTieringEnabled(long hotDataAge) {
     Configuration conf = new Configuration(defaultConf);
-    conf.set(DataTieringManager.DATATIERING_KEY, DataTieringType.TIME_RANGE.name());
+    conf.set(DataTieringManager.DATATIERING_KEY, DataTieringType.CUSTOM_CELL_VALUE.name());
     conf.set(DataTieringManager.DATATIERING_HOT_DATA_AGE_KEY, String.valueOf(hotDataAge));
     return conf;
   }
@@ -821,6 +820,10 @@ public class TestDataTieringManager {
       }
     } finally {
       writer.appendTrackedTimestampsToMetadata();
+      TimeRangeTracker timeRangeTracker = TimeRangeTracker.create(TimeRangeTracker.Type.NON_SYNC);
+      timeRangeTracker.setMin(timestamp);
+      timeRangeTracker.setMax(timestamp);
+      writer.appendCustomCellTimestampsToMetadata(timeRangeTracker);
       writer.close();
     }
   }

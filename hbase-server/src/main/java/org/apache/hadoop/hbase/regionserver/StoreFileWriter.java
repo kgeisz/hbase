@@ -252,6 +252,11 @@ public class StoreFileWriter implements CellSink, ShipperListener {
       writer.appendTrackedTimestampsToMetadata();
     }
 
+  public void appendCustomCellTimestampsToMetadata(TimeRangeTracker timeRangeTracker)
+    throws IOException {
+    writer.appendCustomCellTimestampsToMetadata(timeRangeTracker);
+  }
+
   private void appendGeneralBloomfilter(final Cell cell) throws IOException {
     if (this.generalBloomFilterWriter != null) {
       /*
