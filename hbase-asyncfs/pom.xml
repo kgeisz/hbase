@@ -130,6 +130,10 @@
       <artifactId>reload4j</artifactId>
       <scope>test</scope>
     </dependency>
+      <dependency>
+          <artifactId>hadoop-hdfs-client</artifactId>
+          <groupId>org.apache.hadoop</groupId>
+      </dependency>
   </dependencies>
   <build>
     <plugins>
