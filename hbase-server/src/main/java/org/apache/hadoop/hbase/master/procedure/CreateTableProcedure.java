@@ -33,6 +33,7 @@ import org.apache.hadoop.hbase.client.TableState;
 import org.apache.hadoop.hbase.master.MasterCoprocessorHost;
 import org.apache.hadoop.hbase.master.MasterFileSystem;
 import org.apache.hadoop.hbase.procedure2.ProcedureStateSerializer;
+import org.apache.hadoop.hbase.regionserver.compactions.CustomCellTieringUtils;
 import org.apache.hadoop.hbase.regionserver.storefiletracker.StoreFileTrackerFactory;
 import org.apache.hadoop.hbase.regionserver.storefiletracker.StoreFileTrackerValidationUtils;
 import org.apache.hadoop.hbase.replication.ReplicationException;
@@ -255,6 +256,8 @@ public class CreateTableProcedure extends AbstractStateMachineTableProcedure<Cre
     // check for store file tracker configurations
     StoreFileTrackerValidationUtils.checkForCreateTable(env.getMasterConfiguration(),
       tableDescriptor);
+
+    CustomCellTieringUtils.checkForModifyTable(tableDescriptor);
 
     return true;
   }

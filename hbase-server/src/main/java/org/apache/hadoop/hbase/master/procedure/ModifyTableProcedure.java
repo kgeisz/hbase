@@ -48,6 +48,8 @@ import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.ModifyTableState;
 
+import org.apache.hadoop.hbase.regionserver.compactions.CustomCellTieringUtils;
+
 @InterfaceAudience.Private
 public class ModifyTableProcedure extends AbstractStateMachineTableProcedure<ModifyTableState> {
   private static final Logger LOG = LoggerFactory.getLogger(ModifyTableProcedure.class);
@@ -319,6 +321,7 @@ public class ModifyTableProcedure extends AbstractStateMachineTableProcedure<Mod
     // check for store file tracker configurations
     StoreFileTrackerValidationUtils.checkForModifyTable(env.getMasterConfiguration(),
       unmodifiedTableDescriptor, modifiedTableDescriptor, !isTableEnabled(env));
+    CustomCellTieringUtils.checkForModifyTable(modifiedTableDescriptor);
   }
 
   /**
