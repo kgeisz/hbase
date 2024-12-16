@@ -19,18 +19,12 @@ package org.apache.hadoop.hbase.regionserver;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.CellComparator;
-import org.apache.hadoop.hbase.regionserver.DateTieredStoreEngine;
-import org.apache.hadoop.hbase.regionserver.DefaultStoreFileManager;
-import org.apache.hadoop.hbase.regionserver.DefaultStoreFlusher;
-import org.apache.hadoop.hbase.regionserver.HStore;
-import org.apache.hadoop.hbase.regionserver.StoreFileComparators;
-import org.apache.hadoop.hbase.regionserver.compactions.CustomCellDateTieredCompactionPolicy;
+import org.apache.hadoop.hbase.regionserver.compactions.CustomCellTieredCompactionPolicy;
 import org.apache.hadoop.hbase.regionserver.compactions.CustomCellTieredCompactor;
-import org.apache.hadoop.hbase.regionserver.compactions.DateTieredCompactor;
 import org.apache.yetus.audience.InterfaceAudience;
 import java.io.IOException;
 import static org.apache.hadoop.hbase.regionserver.DefaultStoreEngine.DEFAULT_COMPACTION_POLICY_CLASS_KEY;
-import static org.apache.hadoop.hbase.regionserver.compactions.CustomCellDateTieredCompactionPolicy.TIERING_CELL_QUALIFIER;
+import static org.apache.hadoop.hbase.regionserver.compactions.CustomCellTieredCompactionPolicy.TIERING_CELL_QUALIFIER;
 
 @InterfaceAudience.Private
 public class CustomCellTieredStoreEngine extends DateTieredStoreEngine {
@@ -41,7 +35,7 @@ public class CustomCellTieredStoreEngine extends DateTieredStoreEngine {
     conf = new Configuration(conf);
     conf.set(TIERING_CELL_QUALIFIER, store.conf.get(TIERING_CELL_QUALIFIER));
     conf.set(DEFAULT_COMPACTION_POLICY_CLASS_KEY,
-      CustomCellDateTieredCompactionPolicy.class.getName());
+      CustomCellTieredCompactionPolicy.class.getName());
     createCompactionPolicy(conf, store);
     this.storeFileManager = new DefaultStoreFileManager(kvComparator,
       StoreFileComparators.SEQ_ID_MAX_TIMESTAMP, conf, compactionPolicy.getConf());

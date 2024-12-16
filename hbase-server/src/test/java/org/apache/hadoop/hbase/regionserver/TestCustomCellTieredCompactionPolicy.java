@@ -26,24 +26,20 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseClassTestRule;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.client.RegionInfo;
-import org.apache.hadoop.hbase.regionserver.compactions.CustomCellDateTieredCompactionPolicy;
+import org.apache.hadoop.hbase.regionserver.compactions.CustomCellTieredCompactionPolicy;
 import org.apache.hadoop.hbase.regionserver.compactions.DateTieredCompactionRequest;
 import org.apache.hadoop.hbase.testclassification.RegionServerTests;
 import org.apache.hadoop.hbase.testclassification.SmallTests;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
 import org.apache.hadoop.hbase.util.ManualEnvironmentEdge;
-import org.apache.hbase.thirdparty.com.google.common.collect.Lists;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -74,13 +70,13 @@ public class TestCustomCellTieredCompactionPolicy {
     return msf;
   }
 
-  private CustomCellDateTieredCompactionPolicy mockAndCreatePolicy() throws Exception {
+  private CustomCellTieredCompactionPolicy mockAndCreatePolicy() throws Exception {
     RegionInfo mockedRegionInfo = mock(RegionInfo.class);
     when(mockedRegionInfo.getEncodedName()).thenReturn("1234567890987654321");
     StoreConfigInformation mockedStoreConfig = mock(StoreConfigInformation.class);
     when(mockedStoreConfig.getRegionInfo()).thenReturn(mockedRegionInfo);
-    CustomCellDateTieredCompactionPolicy policy =
-      new CustomCellDateTieredCompactionPolicy(TEST_UTIL.getConfiguration(), mockedStoreConfig);
+    CustomCellTieredCompactionPolicy policy =
+      new CustomCellTieredCompactionPolicy(TEST_UTIL.getConfiguration(), mockedStoreConfig);
     return policy;
   }
 
@@ -93,7 +89,7 @@ public class TestCustomCellTieredCompactionPolicy {
   }
   @Test
   public void testGetCompactBoundariesForMajorNoOld() throws Exception {
-    CustomCellDateTieredCompactionPolicy policy = mockAndCreatePolicy();
+    CustomCellTieredCompactionPolicy policy = mockAndCreatePolicy();
     Path file = preparePath();
     ArrayList<HStoreFile> files = new ArrayList<>();
     files.add(createFile(file, EnvironmentEdgeManager.currentTime(), EnvironmentEdgeManager.currentTime(),
@@ -106,7 +102,7 @@ public class TestCustomCellTieredCompactionPolicy {
 
   @Test
   public void testGetCompactBoundariesForMajorAllOld() throws Exception {
-    CustomCellDateTieredCompactionPolicy policy = mockAndCreatePolicy();
+    CustomCellTieredCompactionPolicy policy = mockAndCreatePolicy();
     Path file = preparePath();
     ArrayList<HStoreFile> files = new ArrayList<>();
     //The default cut off age is 10 years, so any of the min/max value there should get in the old tier
@@ -118,7 +114,7 @@ public class TestCustomCellTieredCompactionPolicy {
 
   @Test
   public void testGetCompactBoundariesForMajorOneOnEachSide() throws Exception {
-    CustomCellDateTieredCompactionPolicy policy = mockAndCreatePolicy();
+    CustomCellTieredCompactionPolicy policy = mockAndCreatePolicy();
     Path file = preparePath();
     ArrayList<HStoreFile> files = new ArrayList<>();
     files.add(createFile(file, 0, 1, 1024, 0));
@@ -129,7 +125,7 @@ public class TestCustomCellTieredCompactionPolicy {
 
   @Test
   public void testGetCompactBoundariesForMajorOneCrossing() throws Exception {
-    CustomCellDateTieredCompactionPolicy policy = mockAndCreatePolicy();
+    CustomCellTieredCompactionPolicy policy = mockAndCreatePolicy();
     Path file = preparePath();
     ArrayList<HStoreFile> files = new ArrayList<>();
     files.add(createFile(file, 0, EnvironmentEdgeManager.currentTime(), 1024, 0));
@@ -143,8 +139,8 @@ public class TestCustomCellTieredCompactionPolicy {
   }
 
   private void testShouldPerformMajorCompaction(long min, long max, int numFiles,
-    PolicyValidator<CustomCellDateTieredCompactionPolicy, ArrayList<HStoreFile>> validation) throws Exception {
-    CustomCellDateTieredCompactionPolicy policy = mockAndCreatePolicy();
+    PolicyValidator<CustomCellTieredCompactionPolicy, ArrayList<HStoreFile>> validation) throws Exception {
+    CustomCellTieredCompactionPolicy policy = mockAndCreatePolicy();
     Path file = preparePath();
     ArrayList<HStoreFile> files = new ArrayList<>();
     ManualEnvironmentEdge timeMachine = new ManualEnvironmentEdge();
@@ -187,7 +183,7 @@ public class TestCustomCellTieredCompactionPolicy {
 
   @Test
   public void testSelectMinorCompactionTwoFilesNoOld() throws Exception {
-    CustomCellDateTieredCompactionPolicy policy = mockAndCreatePolicy();
+    CustomCellTieredCompactionPolicy policy = mockAndCreatePolicy();
     Path file = preparePath();
     ArrayList<HStoreFile> files = new ArrayList<>();
     files.add(createFile(file, EnvironmentEdgeManager.currentTime(), EnvironmentEdgeManager.currentTime(),
@@ -202,7 +198,7 @@ public class TestCustomCellTieredCompactionPolicy {
 
   @Test
   public void testSelectMinorCompactionThreeFilesNoOld() throws Exception {
-    CustomCellDateTieredCompactionPolicy policy = mockAndCreatePolicy();
+    CustomCellTieredCompactionPolicy policy = mockAndCreatePolicy();
     Path file = preparePath();
     ArrayList<HStoreFile> files = new ArrayList<>();
     files.add(createFile(file, EnvironmentEdgeManager.currentTime(), EnvironmentEdgeManager.currentTime(),
@@ -217,7 +213,7 @@ public class TestCustomCellTieredCompactionPolicy {
 
   @Test
   public void testSelectMinorCompactionThreeFilesAllOld() throws Exception {
-    CustomCellDateTieredCompactionPolicy policy = mockAndCreatePolicy();
+    CustomCellTieredCompactionPolicy policy = mockAndCreatePolicy();
     Path file = preparePath();
     ArrayList<HStoreFile> files = new ArrayList<>();
     files.add(createFile(file, 0, 1,
@@ -232,7 +228,7 @@ public class TestCustomCellTieredCompactionPolicy {
 
   @Test
   public void testSelectMinorCompactionThreeFilesOneOldTwoNew() throws Exception {
-    CustomCellDateTieredCompactionPolicy policy = mockAndCreatePolicy();
+    CustomCellTieredCompactionPolicy policy = mockAndCreatePolicy();
     Path file = preparePath();
     ArrayList<HStoreFile> files = new ArrayList<>();
     files.add(createFile(file, 0, 1,
@@ -247,7 +243,7 @@ public class TestCustomCellTieredCompactionPolicy {
 
   @Test
   public void testSelectMinorCompactionThreeFilesTwoOldOneNew() throws Exception {
-    CustomCellDateTieredCompactionPolicy policy = mockAndCreatePolicy();
+    CustomCellTieredCompactionPolicy policy = mockAndCreatePolicy();
     Path file = preparePath();
     ArrayList<HStoreFile> files = new ArrayList<>();
     files.add(createFile(file, 0, 1,
