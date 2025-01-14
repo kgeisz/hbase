@@ -5,8 +5,6 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.io.hfile.HFileWriterImpl;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.yetus.audience.InterfaceAudience;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
@@ -18,8 +16,8 @@ import java.util.function.Function;
 @InterfaceAudience.Private
 public class CustomTieringMultiFileWriter extends DateTieredMultiFileWriter {
 
-  public static final byte[] TIERING_CELL_TIME_RANGE =
-    Bytes.toBytes("TIERING_CELL_TIME_RANGE");
+  public static final byte[] CUSTOM_TIERING_TIME_RANGE =
+    Bytes.toBytes("CUSTOM_TIERING_TIME_RANGE");
 
   private NavigableMap<Long, TimeRangeTracker> lowerBoundary2TimeRanger = new TreeMap<>();
 
@@ -62,7 +60,7 @@ public class CustomTieringMultiFileWriter extends DateTieredMultiFileWriter {
     for(Map.Entry<Long, StoreFileWriter> entry : this.lowerBoundary2Writer.entrySet()){
       StoreFileWriter writer = entry.getValue();
       if(writer!=null) {
-        writer.appendFileInfo(TIERING_CELL_TIME_RANGE,
+        writer.appendFileInfo(CUSTOM_TIERING_TIME_RANGE,
           TimeRangeTracker.toByteArray(lowerBoundary2TimeRanger.get(entry.getKey())));
       }
     }

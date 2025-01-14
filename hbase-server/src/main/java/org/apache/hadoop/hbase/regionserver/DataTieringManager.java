@@ -18,6 +18,7 @@
 package org.apache.hadoop.hbase.regionserver;
 
 import java.io.IOException;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -169,7 +170,7 @@ public class DataTieringManager {
       if (hStoreFile == null) {
         throw new DataTieringException("Store file corresponding to " + hFilePath + " doesn't exist");
       }
-      return hotDataValidator(dataTieringType.instance.getTimestamp(getHStoreFile(hFilePath)),
+      return hotDataValidator(dataTieringType.getInstance().getTimestamp(getHStoreFile(hFilePath)),
         getDataTieringHotDataAge(configuration));
     }
     // DataTieringType.NONE or other types are considered hot by default
@@ -188,7 +189,7 @@ public class DataTieringManager {
   public boolean isHotData(HFileInfo hFileInfo, Configuration configuration) {
     DataTieringType dataTieringType = getDataTieringType(configuration);
     if (hFileInfo != null && !dataTieringType.equals(DataTieringType.NONE)) {
-      return hotDataValidator(dataTieringType.instance.getTimestamp(hFileInfo),
+      return hotDataValidator(dataTieringType.getInstance().getTimestamp(hFileInfo),
         getDataTieringHotDataAge(configuration));
     }
     // DataTieringType.NONE or other types are considered hot by default
@@ -294,7 +295,8 @@ public class DataTieringManager {
         for (HStoreFile hStoreFile : hStore.getStorefiles()) {
           String hFileName =
             hStoreFile.getFileInfo().getHFileInfo().getHFileContext().getHFileName();
-          long maxTimeStamp = dataTieringType.instance.getTimestamp(hStoreFile);
+          long maxTimeStamp = dataTieringType.getInstance().getTimestamp(hStoreFile);
+          LOG.debug("Max TS for file {} is {}", hFileName, new Date(maxTimeStamp));
           long currentTimestamp = EnvironmentEdgeManager.getDelegate().currentTime();
           long fileAge = currentTimestamp - maxTimeStamp;
           if (fileAge > hotDataAge) {

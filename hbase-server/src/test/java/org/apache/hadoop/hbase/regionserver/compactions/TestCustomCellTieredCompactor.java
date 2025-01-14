@@ -29,7 +29,7 @@ import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.client.TableDescriptorBuilder;
-import org.apache.hadoop.hbase.regionserver.CustomCellTieredStoreEngine;
+import org.apache.hadoop.hbase.regionserver.CustomTieredStoreEngine;
 import org.apache.hadoop.hbase.regionserver.TimeRangeTracker;
 import org.apache.hadoop.hbase.testclassification.RegionServerTests;
 import org.apache.hadoop.hbase.testclassification.SmallTests;
@@ -42,8 +42,8 @@ import org.junit.experimental.categories.Category;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import static org.apache.hadoop.hbase.regionserver.CustomTieringMultiFileWriter.TIERING_CELL_TIME_RANGE;
-import static org.apache.hadoop.hbase.regionserver.compactions.CustomCellTieredCompactionPolicy.TIERING_CELL_QUALIFIER;
+import static org.apache.hadoop.hbase.regionserver.CustomTieringMultiFileWriter.CUSTOM_TIERING_TIME_RANGE;
+import static org.apache.hadoop.hbase.regionserver.compactions.CustomCellTieringValueProvider.TIERING_CELL_QUALIFIER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
@@ -75,7 +75,7 @@ public class TestCustomCellTieredCompactor {
   @Test
   public void testCustomCellTieredCompactor() throws Exception {
     ColumnFamilyDescriptorBuilder clmBuilder = ColumnFamilyDescriptorBuilder.newBuilder(FAMILY);
-    clmBuilder.setValue("hbase.hstore.engine.class", CustomCellTieredStoreEngine.class.getName());
+    clmBuilder.setValue("hbase.hstore.engine.class", CustomTieredStoreEngine.class.getName());
     clmBuilder.setValue(TIERING_CELL_QUALIFIER, "date");
     TableName tableName = TableName.valueOf("testCustomCellTieredCompactor");
     TableDescriptorBuilder tblBuilder = TableDescriptorBuilder.newBuilder(tableName);
@@ -115,7 +115,7 @@ public class TestCustomCellTieredCompactor {
     assertEquals(1, numHFiles);
     utility.getMiniHBaseCluster().getRegions(tableName).get(0).getStore(FAMILY).getStorefiles().forEach(
       file -> {
-        byte[] rangeBytes = file.getMetadataValue(TIERING_CELL_TIME_RANGE);
+        byte[] rangeBytes = file.getMetadataValue(CUSTOM_TIERING_TIME_RANGE);
         assertNotNull(rangeBytes);
         try {
           TimeRangeTracker timeRangeTracker = TimeRangeTracker.parseFrom(rangeBytes);
@@ -136,7 +136,7 @@ public class TestCustomCellTieredCompactor {
     assertEquals(2, numHFiles);
     utility.getMiniHBaseCluster().getRegions(tableName).get(0).getStore(FAMILY).getStorefiles().forEach(
       file -> {
-        byte[] rangeBytes = file.getMetadataValue(TIERING_CELL_TIME_RANGE);
+        byte[] rangeBytes = file.getMetadataValue(CUSTOM_TIERING_TIME_RANGE);
         assertNotNull(rangeBytes);
         try {
           TimeRangeTracker timeRangeTracker = TimeRangeTracker.parseFrom(rangeBytes);

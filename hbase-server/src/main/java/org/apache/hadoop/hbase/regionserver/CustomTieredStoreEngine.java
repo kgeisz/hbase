@@ -19,28 +19,29 @@ package org.apache.hadoop.hbase.regionserver;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.CellComparator;
-import org.apache.hadoop.hbase.regionserver.compactions.CustomCellTieredCompactionPolicy;
-import org.apache.hadoop.hbase.regionserver.compactions.CustomCellTieredCompactor;
+import org.apache.hadoop.hbase.CompoundConfiguration;
+import org.apache.hadoop.hbase.regionserver.compactions.CustomTieredCompactionPolicy;
+import org.apache.hadoop.hbase.regionserver.compactions.CustomTieredCompactor;
 import org.apache.yetus.audience.InterfaceAudience;
 import java.io.IOException;
 import static org.apache.hadoop.hbase.regionserver.DefaultStoreEngine.DEFAULT_COMPACTION_POLICY_CLASS_KEY;
-import static org.apache.hadoop.hbase.regionserver.compactions.CustomCellTieredCompactionPolicy.TIERING_CELL_QUALIFIER;
 
 @InterfaceAudience.Private
-public class CustomCellTieredStoreEngine extends DateTieredStoreEngine {
+public class CustomTieredStoreEngine extends DateTieredStoreEngine {
 
   @Override
   protected void createComponents(Configuration conf, HStore store, CellComparator kvComparator)
     throws IOException {
-    conf = new Configuration(conf);
-    conf.set(TIERING_CELL_QUALIFIER, store.conf.get(TIERING_CELL_QUALIFIER));
-    conf.set(DEFAULT_COMPACTION_POLICY_CLASS_KEY,
-      CustomCellTieredCompactionPolicy.class.getName());
-    createCompactionPolicy(conf, store);
+    CompoundConfiguration config = new CompoundConfiguration();
+    config.add(conf);
+    config.add(store.conf);
+    config.set(DEFAULT_COMPACTION_POLICY_CLASS_KEY,
+      CustomTieredCompactionPolicy.class.getName());
+    createCompactionPolicy(config, store);
     this.storeFileManager = new DefaultStoreFileManager(kvComparator,
-      StoreFileComparators.SEQ_ID_MAX_TIMESTAMP, conf, compactionPolicy.getConf());
-    this.storeFlusher = new DefaultStoreFlusher(conf, store);
-    this.compactor = new CustomCellTieredCompactor(conf, store);
+      StoreFileComparators.SEQ_ID_MAX_TIMESTAMP, config, compactionPolicy.getConf());
+    this.storeFlusher = new DefaultStoreFlusher(config, store);
+    this.compactor = new CustomTieredCompactor(config, store);
   }
 
 }

@@ -786,7 +786,7 @@ public class TestCustomCellDataTieringManager {
 
   private static Configuration getConfWithCustomCellDataTieringEnabled(long hotDataAge) {
     Configuration conf = new Configuration(defaultConf);
-    conf.set(DataTieringManager.DATATIERING_KEY, DataTieringType.CUSTOM_CELL_VALUE.name());
+    conf.set(DataTieringManager.DATATIERING_KEY, DataTieringType.CUSTOM.name());
     conf.set(DataTieringManager.DATATIERING_HOT_DATA_AGE_KEY, String.valueOf(hotDataAge));
     return conf;
   }

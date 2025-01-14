@@ -1,3 +1,4 @@
+package org.apache.hadoop.hbase.regionserver.compactions;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -15,38 +16,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hadoop.hbase.regionserver.compactions;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.ArrayBackedTag;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.PrivateCellUtil;
 import org.apache.hadoop.hbase.Tag;
 import org.apache.hadoop.hbase.TagType;
-import org.apache.hadoop.hbase.regionserver.CustomTieringMultiFileWriter;
-import org.apache.hadoop.hbase.regionserver.DateTieredMultiFileWriter;
-import org.apache.hadoop.hbase.regionserver.HStore;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.yetus.audience.InterfaceAudience;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import static org.apache.hadoop.hbase.regionserver.compactions.CustomCellTieredCompactionPolicy.TIERING_CELL_QUALIFIER;
 
 @InterfaceAudience.Private
-public class CustomCellTieredCompactor extends DateTieredCompactor {
-
+public class CustomCellTieringValueProvider implements CustomTieredCompactor.TieringValueProvider {
+  public static final String TIERING_CELL_QUALIFIER = "TIERING_CELL_QUALIFIER";
   private byte[] tieringQualifier;
 
-  public CustomCellTieredCompactor(Configuration conf, HStore store) {
-    super(conf, store);
+  @Override
+  public void init(Configuration conf) throws Exception {
     tieringQualifier = Bytes.toBytes(conf.get(TIERING_CELL_QUALIFIER));
   }
 
-  @Override
-  protected List<Cell> decorateCells(List<Cell> cells) {
+  public List<Cell> decorateCells(List<Cell> cells) {
     //if no tiering qualifier properly set, skips the whole flow
     if(tieringQualifier!=null) {
       byte[] tieringValue = null;
@@ -77,7 +70,7 @@ public class CustomCellTieredCompactor extends DateTieredCompactor {
     }
   }
 
-  private long getTieringValue(Cell cell) {
+  public long getTieringValue(Cell cell) {
     Optional<Tag> tagOptional = PrivateCellUtil.getTag(cell, TagType.CELL_VALUE_TIERING_TAG_TYPE);
     if(tagOptional.isPresent()) {
       Tag tag = tagOptional.get();
@@ -85,12 +78,4 @@ public class CustomCellTieredCompactor extends DateTieredCompactor {
     }
     return Long.MAX_VALUE;
   }
-
-  @Override
-  protected DateTieredMultiFileWriter createMultiWriter(final CompactionRequestImpl request,
-    final List<Long> lowerBoundaries, final Map<Long, String> lowerBoundariesPolicies) {
-    return new CustomTieringMultiFileWriter(lowerBoundaries, lowerBoundariesPolicies,
-      needEmptyFile(request), CustomCellTieredCompactor.this::getTieringValue);
-  }
-
 }

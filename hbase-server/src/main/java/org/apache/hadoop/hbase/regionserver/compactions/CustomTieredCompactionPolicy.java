@@ -32,10 +32,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import static org.apache.hadoop.hbase.regionserver.CustomTieringMultiFileWriter.TIERING_CELL_TIME_RANGE;
+import static org.apache.hadoop.hbase.regionserver.CustomTieringMultiFileWriter.CUSTOM_TIERING_TIME_RANGE;
 
 @InterfaceAudience.Private
-public class CustomCellTieredCompactionPolicy extends DateTieredCompactionPolicy {
+public class CustomTieredCompactionPolicy extends DateTieredCompactionPolicy {
 
   public static final String AGE_LIMIT_MILLIS =
     "hbase.hstore.compaction.date.tiered.custom.age.limit.millis";
@@ -43,13 +43,11 @@ public class CustomCellTieredCompactionPolicy extends DateTieredCompactionPolicy
   //Defaults to 10 years
   public static final long DEFAULT_AGE_LIMIT_MILLIS = (long) (10L*365.25*24L*60L*60L*1000L);
 
-  public static final String TIERING_CELL_QUALIFIER = "TIERING_CELL_QUALIFIER";
-
-  private static final Logger LOG = LoggerFactory.getLogger(CustomCellTieredCompactionPolicy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CustomTieredCompactionPolicy.class);
 
   private long cutOffTimestamp;
 
-  public CustomCellTieredCompactionPolicy(Configuration conf,
+  public CustomTieredCompactionPolicy(Configuration conf,
     StoreConfigInformation storeConfigInfo) throws IOException {
     super(conf, storeConfigInfo);
     cutOffTimestamp = EnvironmentEdgeManager.currentTime() -
@@ -62,7 +60,7 @@ public class CustomCellTieredCompactionPolicy extends DateTieredCompactionPolicy
     MutableLong min = new MutableLong(Long.MAX_VALUE);
     MutableLong max = new MutableLong(0);
     filesToCompact.forEach(f -> {
-      byte[] timeRangeBytes = f.getMetadataValue(TIERING_CELL_TIME_RANGE);
+      byte[] timeRangeBytes = f.getMetadataValue(CUSTOM_TIERING_TIME_RANGE);
       long minCurrent = Long.MAX_VALUE;
       long maxCurrent = 0;
       if(timeRangeBytes!=null) {
@@ -119,7 +117,7 @@ public class CustomCellTieredCompactionPolicy extends DateTieredCompactionPolicy
         if(isMajorOrBulkloadResult(f, now - lowTimestamp)){
           return true;
         }
-        byte[] timeRangeBytes = f.getMetadataValue(TIERING_CELL_TIME_RANGE);
+        byte[] timeRangeBytes = f.getMetadataValue(CUSTOM_TIERING_TIME_RANGE);
         TimeRangeTracker timeRangeTracker = TimeRangeTracker.parseFrom(timeRangeBytes);
         if(timeRangeTracker.getMin() < cutOffTimestamp) {
           if (timeRangeTracker.getMax() > cutOffTimestamp) {
