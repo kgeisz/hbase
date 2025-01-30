@@ -241,6 +241,9 @@ public class TestVerifyBucketCacheFile {
       new BucketCache("file:" + testDir + "/bucket.cache", capacitySize, constructedBlockSize,
         constructedBlockSizes, writeThreads, writerQLen, testDir + "/bucket.persistence");
     assertTrue(bucketCache.waitForCacheInitialization(10000));
+    while(!bucketCache.getBackingMapValidated().get()){
+      Thread.sleep(10);
+    }
     assertEquals(0, bucketCache.getAllocator().getUsedSize());
     assertEquals(0, bucketCache.backingMap.size());
 
