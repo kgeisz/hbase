@@ -866,10 +866,6 @@ public class ReplicationSource implements ReplicationSourceInterface {
     return totalReplicatedEdits.get();
   }
 
-  long getSleepForRetries() {
-    return sleepForRetries;
-  }
-
   @Override
   public void logPositionAndCleanOldLogs(WALEntryBatch entryBatch, ReplicationResult replicated) {
     String walName = entryBatch.getLastWalPath().getName();

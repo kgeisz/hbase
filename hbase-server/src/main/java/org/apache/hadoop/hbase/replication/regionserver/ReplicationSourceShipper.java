@@ -162,15 +162,7 @@ public class ReplicationSourceShipper extends Thread {
     List<Entry> entries = entryBatch.getWalEntries();
     int sleepMultiplier = 0;
     if (entries.isEmpty()) {
-      /*
-       * Delegate to the endpoint to decide how to treat empty entry batches. In most replication
-       * flows, receiving an empty entry batch means that everything so far has been successfully
-       * replicated and committed — so it's safe to mark the WAL position as committed (COMMIT).
-       * However, some endpoints (e.g., asynchronous S3 backups) may buffer writes and delay actual
-       * persistence. In such cases, we must avoid committing the WAL position prematurely.
-       */
-      final ReplicationResult result = getReplicationResult();
-      updateLogPosition(entryBatch, result);
+      updateLogPosition(entryBatch, ReplicationResult.COMMITTED);
       return;
     }
     int currentSize = (int) entryBatch.getHeapSize();
@@ -277,11 +269,7 @@ public class ReplicationSourceShipper extends Thread {
     }
   }
 
-  @RestrictedApi(
-      explanation = "Package-private for test visibility only. Do not use outside tests.",
-      link = "",
-      allowedOnPath = "(.*/src/test/.*|.*/org/apache/hadoop/hbase/replication/regionserver/ReplicationSourceShipper.java)")
-  boolean updateLogPosition(WALEntryBatch batch, ReplicationResult replicated) {
+  private boolean updateLogPosition(WALEntryBatch batch, ReplicationResult replicated) {
     boolean updated = false;
     // if end of file is true, then the logPositionAndCleanOldLogs method will remove the file
     // record on zk, so let's call it. The last wal position maybe zero if end of file is true and
