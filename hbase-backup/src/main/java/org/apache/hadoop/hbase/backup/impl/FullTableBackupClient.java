@@ -17,7 +17,6 @@
  */
 package org.apache.hadoop.hbase.backup.impl;
 
-import static org.apache.hadoop.hbase.HConstants.REPLICATION_BULKLOAD_ENABLE_KEY;
 import static org.apache.hadoop.hbase.HConstants.REPLICATION_SCOPE_GLOBAL;
 import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.BACKUP_ATTEMPTS_PAUSE_MS_KEY;
 import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.BACKUP_MAX_ATTEMPTS_KEY;
@@ -174,34 +173,26 @@ public class FullTableBackupClient extends TableBackupClient {
   private void handleContinuousBackup(Admin admin) throws IOException {
     backupInfo.setPhase(BackupInfo.BackupPhase.SETUP_WAL_REPLICATION);
     long startTimestamp = startContinuousWALBackup(admin);
-    backupManager.addContinuousBackupTableSet(backupInfo.getTables(), startTimestamp);
-
-    // Updating the start time of this backup to reflect the actual beginning of the full backup.
-    // So far, we have only set up continuous WAL replication, but the full backup has not yet
-    // started.
-    // Setting the correct start time is crucial for Point-In-Time Recovery (PITR).
-    // When selecting a backup for PITR, we must ensure that the backup started **on or after** the
-    // starting time of the WALs. If WAL streaming began later, we couldn't guarantee that WALs
-    // exist for the entire period between the backup's start time and the desired PITR timestamp.
-    backupInfo.setStartTs(startTimestamp);
 
     performBackupSnapshots(admin);
+
+    backupManager.addContinuousBackupTableSet(backupInfo.getTables(), startTimestamp);
 
     // set overall backup status: complete. Here we make sure to complete the backup.
     // After this checkpoint, even if entering cancel process, will let the backup finished
     backupInfo.setState(BackupState.COMPLETE);
 
-    if (!conf.getBoolean(REPLICATION_BULKLOAD_ENABLE_KEY, false)) {
-      System.out.println("WARNING: Bulkload replication is not enabled. "
-        + "Since continuous backup is using HBase replication, bulk loaded files won't be backed up as part of continuous backup. "
-        + "To ensure bulk-loaded files are backed up, enable bulkload replication "
-        + "(hbase.replication.bulkload.enabled=true) and configure a unique cluster ID using "
-        + "hbase.replication.cluster.id. This cluster ID is required by the replication framework "
-        + "to uniquely identify clusters, even if continuous backup itself does not directly rely on it.");
+    if (!conf.getBoolean("hbase.replication.bulkload.enabled", false)) {
+      System.out.println("NOTE: Bulkload replication is not enabled. "
+        + "Bulk loaded files will not be backed up as part of continuous backup. "
+        + "To ensure bulk loaded files are included in the backup, please enable bulkload replication "
+        + "(hbase.replication.bulkload.enabled=true) and configure other necessary settings "
+        + "to properly enable bulkload replication.");
     }
   }
 
   private void handleNonContinuousBackup(Admin admin) throws IOException {
+    initializeBackupStartCode(backupManager);
     performLogRoll();
     performBackupSnapshots(admin);
     backupManager.addIncrementalBackupTableSet(backupInfo.getTables());
@@ -211,6 +202,19 @@ public class FullTableBackupClient extends TableBackupClient {
     backupInfo.setState(BackupState.COMPLETE);
 
     updateBackupMetadata();
+  }
+
+  private void initializeBackupStartCode(BackupManager backupManager) throws IOException {
+    String savedStartCode;
+    boolean firstBackup;
+    // do snapshot for full table backup
+    savedStartCode = backupManager.readBackupStartCode();
+    firstBackup = savedStartCode == null || Long.parseLong(savedStartCode) == 0L;
+    if (firstBackup) {
+      // This is our first backup. Let's put some marker to system table so that we can hold the
+      // logs while we do the backup.
+      backupManager.writeBackupStartCode(0L);
+    }
   }
 
   private void performLogRoll() throws IOException {
@@ -248,6 +252,8 @@ public class FullTableBackupClient extends TableBackupClient {
     backupManager.writeRegionServerLogTimestamp(backupInfo.getTables(), newTimestamps);
     Map<TableName, Map<String, Long>> timestampMap = backupManager.readLogTimestampMap();
     backupInfo.setTableSetTimestampMap(timestampMap);
+    Long newStartCode = BackupUtils.getMinValue(BackupUtils.getRSLogTimestampMins(timestampMap));
+    backupManager.writeBackupStartCode(newStartCode);
   }
 
   private long startContinuousWALBackup(Admin admin) throws IOException {
@@ -286,9 +292,6 @@ public class FullTableBackupClient extends TableBackupClient {
       .collect(Collectors.toMap(tableName -> tableName, tableName -> new ArrayList<>()));
 
     try {
-      if (!admin.isReplicationPeerEnabled(CONTINUOUS_BACKUP_REPLICATION_PEER)) {
-        admin.enableReplicationPeer(CONTINUOUS_BACKUP_REPLICATION_PEER);
-      }
       admin.appendReplicationPeerTableCFs(CONTINUOUS_BACKUP_REPLICATION_PEER, tableMap);
       LOG.info("Updated replication peer {} with table and column family map.",
         CONTINUOUS_BACKUP_REPLICATION_PEER);
