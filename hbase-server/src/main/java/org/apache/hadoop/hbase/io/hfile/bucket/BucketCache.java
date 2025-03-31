@@ -285,7 +285,7 @@ public class BucketCache implements BlockCache, HeapSize {
     "hbase.bucketcache.persistent.file.integrity.check.algorithm";
   private static final String DEFAULT_FILE_VERIFY_ALGORITHM = "MD5";
 
-  private static final String QUEUE_ADDITION_WAIT_TIME =
+  static final String QUEUE_ADDITION_WAIT_TIME =
     "hbase.bucketcache.queue.addition.waittime";
   private static final long DEFAULT_QUEUE_ADDITION_WAIT_TIME = 0;
   private long queueAdditionWaitTime;
@@ -611,6 +611,7 @@ public class BucketCache implements BlockCache, HeapSize {
       try {
         successfulAddition = bq.offer(re, queueAdditionWaitTime, TimeUnit.MILLISECONDS);
       } catch (InterruptedException e) {
+        LOG.error("Thread interrupted: ", e);
         Thread.currentThread().interrupt();
       }
     } else {

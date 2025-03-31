@@ -18,6 +18,7 @@
 package org.apache.hadoop.hbase.io.hfile;
 
 import static org.apache.hadoop.hbase.HConstants.BUCKET_CACHE_IOENGINE_KEY;
+import static org.apache.hadoop.hbase.io.hfile.CacheConfig.CACHE_BLOCKS_ON_WRITE_KEY;
 import static org.apache.hadoop.hbase.HConstants.BUCKET_CACHE_PERSISTENT_PATH_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -83,6 +84,7 @@ public class TestBlockEvictionOnRegionMovement {
     conf.set(BUCKET_CACHE_PERSISTENT_PATH_KEY, testDir + "/bucket.persistence");
     conf.setLong(CacheConfig.BUCKETCACHE_PERSIST_INTERVAL_KEY, 100);
     conf.setBoolean(CacheConfig.EVICT_BLOCKS_ON_CLOSE_KEY, true);
+    conf.setBoolean(CACHE_BLOCKS_ON_WRITE_KEY, true);
     zkCluster = TEST_UTIL.startMiniZKCluster();
     cluster = TEST_UTIL.startMiniHBaseCluster(option);
     cluster.setConf(conf);
@@ -100,7 +102,7 @@ public class TestBlockEvictionOnRegionMovement {
     assertTrue(regionServingRS.getBlockCache().isPresent());
     long oldUsedCacheSize =
       regionServingRS.getBlockCache().get().getBlockCaches()[1].getCurrentSize();
-    assertNotEquals(0, regionServingRS.getBlockCache().get().getBlockCaches()[1].getBlockCount());
+    assertNotEquals(0, oldUsedCacheSize);
 
     Admin admin = TEST_UTIL.getAdmin();
     RegionInfo regionToMove = regionServingRS.getRegions(tableRegionMove).get(0).getRegionInfo();
