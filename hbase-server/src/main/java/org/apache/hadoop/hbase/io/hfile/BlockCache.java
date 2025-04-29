@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.conf.ConfigurationObserver;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.yetus.audience.InterfaceAudience;
 
@@ -30,7 +31,7 @@ import org.apache.yetus.audience.InterfaceAudience;
  * cache.
  */
 @InterfaceAudience.Private
-public interface BlockCache extends Iterable<CachedBlock> {
+public interface BlockCache extends Iterable<CachedBlock>, ConfigurationObserver {
   /**
    * Add block to cache.
    * @param cacheKey The block's cache key.
@@ -281,5 +282,16 @@ public interface BlockCache extends Iterable<CachedBlock> {
    */
   default boolean waitForCacheInitialization(long timeout) {
     return true;
+  }
+
+  /**
+   * Allows for BlockCache implementations to provide a mean to refresh their configurations. Since
+   * HBASE-29249, CacheConfig implements PropagatingConfigurationObserver and registers itself
+   * together with the used BlockCache implementation for notifications of dynamic configuration
+   * changes. The default is a noop.
+   * @param config the new configuration to be updated.
+   */
+  default void onConfigurationChange(Configuration config) {
+    // noop
   }
 }

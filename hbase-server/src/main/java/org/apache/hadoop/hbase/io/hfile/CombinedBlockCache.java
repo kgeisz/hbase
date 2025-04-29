@@ -462,6 +462,12 @@ public class CombinedBlockCache implements ResizableBlockCache, HeapSize {
   }
 
   @Override
+  public void onConfigurationChange(Configuration config) {
+    l1Cache.onConfigurationChange(config);
+    l2Cache.onConfigurationChange(config);
+  }
+
+  @Override
   public Optional<Boolean> blockFitsIntoTheCache(HFileBlock block) {
     if (isMetaBlock(block.getBlockType())) {
       return l1Cache.blockFitsIntoTheCache(block);
