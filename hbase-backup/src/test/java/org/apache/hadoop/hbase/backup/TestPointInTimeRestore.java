@@ -18,17 +18,24 @@
 package org.apache.hadoop.hbase.backup;
 
 import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.CONF_CONTINUOUS_BACKUP_WAL_DIR;
+import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.OPTION_ENABLE_CONTINUOUS_BACKUP;
+import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.OPTION_TABLE;
+import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.OPTION_TABLE_MAPPING;
+import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.OPTION_TO_DATETIME;
 import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.ONE_DAY_IN_MILLISECONDS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseClassTestRule;
+import org.apache.hadoop.hbase.HBaseTestingUtil;
 import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.testclassification.LargeTests;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
 import org.apache.hadoop.util.ToolRunner;
 import org.junit.AfterClass;
@@ -36,29 +43,19 @@ import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-/**
- * Integration-style tests for Point-in-Time Restore (PITR).
- * <p>
- * These tests exercise the full backup / continuous backup / restore flow: - create backups at
- * multiple historical points in time (via {@code BackupDriver}) - exercise WAL-based
- * replication/continuous backup - validate Point-in-Time Restore behavior (successful restores,
- * failure cases)
- * </p>
- * <p>
- * NOTE: Some tests also create HFiles and perform HBase bulk-loads (HFile -> table) so the restore
- * flow is validated when bulk-loaded storefiles are present in WALs. This ensures the
- * BulkLoadCollector/BulkFilesCollector logic (discovering bulk-loaded store files referenced from
- * WAL bulk-load descriptors) is exercised by the test suite.
- * </p>
- */
 @Category(LargeTests.class)
 public class TestPointInTimeRestore extends TestBackupBase {
   @ClassRule
   public static final HBaseClassTestRule CLASS_RULE =
     HBaseClassTestRule.forClass(TestPointInTimeRestore.class);
 
+  private static final Logger LOG = LoggerFactory.getLogger(TestPointInTimeRestore.class);
+
   private static final String backupWalDirName = "TestPointInTimeRestoreWalDir";
+  private static final int WAIT_FOR_REPLICATION_MS = 30_000;
   static Path backupWalDir;
   static FileSystem fs;
 
@@ -83,47 +80,38 @@ public class TestPointInTimeRestore extends TestBackupBase {
     // Simulate a backup taken 20 days ago
     EnvironmentEdgeManager
       .injectEdge(() -> System.currentTimeMillis() - 20 * ONE_DAY_IN_MILLISECONDS);
-    // Insert initial data into table1
-    PITRTestUtil.loadRandomData(TEST_UTIL, table1, famName, 1000);
+    loadRandomData(table1, 1000); // Insert initial data into table1
 
     // Perform a full backup for table1 with continuous backup enabled
-    String[] args =
-      PITRTestUtil.buildBackupArgs("full", new TableName[] { table1 }, true, BACKUP_ROOT_DIR);
+    String[] args = buildBackupArgs("full", new TableName[] { table1 }, true);
     int ret = ToolRunner.run(conf1, new BackupDriver(), args);
     assertEquals("Backup should succeed", 0, ret);
 
     // Move time forward to simulate 15 days ago
     EnvironmentEdgeManager
       .injectEdge(() -> System.currentTimeMillis() - 15 * ONE_DAY_IN_MILLISECONDS);
-    PITRTestUtil.loadRandomData(TEST_UTIL, table1, famName, 1000); // Add more data to table1
+    loadRandomData(table1, 1000); // Add more data to table1
+    loadRandomData(table2, 500); // Insert data into table2
 
-    Path dir = TEST_UTIL.getDataTestDirOnTestFS("testBulkLoadByFamily");
-    PITRTestUtil.generateHFiles(dir, TEST_UTIL.getConfiguration(), Bytes.toString(famName));
-    PITRTestUtil.bulkLoadHFiles(table1, dir, TEST_UTIL.getConnection(),
-      TEST_UTIL.getConfiguration());
-
-    PITRTestUtil.loadRandomData(TEST_UTIL, table2, famName, 500); // Insert data into table2
-
-    PITRTestUtil.waitForReplication(); // Ensure replication is complete
+    waitForReplication(); // Ensure replication is complete
 
     // Perform a full backup for table2 with continuous backup enabled
-    args = PITRTestUtil.buildBackupArgs("full", new TableName[] { table2 }, true, BACKUP_ROOT_DIR);
+    args = buildBackupArgs("full", new TableName[] { table2 }, true);
     ret = ToolRunner.run(conf1, new BackupDriver(), args);
     assertEquals("Backup should succeed", 0, ret);
 
     // Move time forward to simulate 10 days ago
     EnvironmentEdgeManager
       .injectEdge(() -> System.currentTimeMillis() - 10 * ONE_DAY_IN_MILLISECONDS);
-    PITRTestUtil.loadRandomData(TEST_UTIL, table2, famName, 500); // Add more data to table2
-    PITRTestUtil.loadRandomData(TEST_UTIL, table3, famName, 500); // Insert data into table3
+    loadRandomData(table2, 500); // Add more data to table2
+    loadRandomData(table3, 500); // Insert data into table3
 
     // Perform a full backup for table3 and table4 (without continuous backup)
-    args = PITRTestUtil.buildBackupArgs("full", new TableName[] { table3, table4 }, false,
-      BACKUP_ROOT_DIR);
+    args = buildBackupArgs("full", new TableName[] { table3, table4 }, false);
     ret = ToolRunner.run(conf1, new BackupDriver(), args);
     assertEquals("Backup should succeed", 0, ret);
 
-    PITRTestUtil.waitForReplication(); // Ensure replication is complete before concluding setup
+    waitForReplication(); // Ensure replication is complete before concluding setup
 
     // Reset time mocking to avoid affecting other tests
     EnvironmentEdgeManager.reset();
@@ -149,18 +137,18 @@ public class TestPointInTimeRestore extends TestBackupBase {
   @Test
   public void testPITR_FailsOutsideWindow() throws Exception {
     // Case 1: Requested restore time is in the future (should fail)
-    String[] args = PITRTestUtil.buildPITRArgs(new TableName[] { table1 },
+    String[] args = buildPITRArgs(new TableName[] { table1 },
       new TableName[] { TableName.valueOf("restoredTable1") },
-      EnvironmentEdgeManager.currentTime() + ONE_DAY_IN_MILLISECONDS, null);
+      EnvironmentEdgeManager.currentTime() + ONE_DAY_IN_MILLISECONDS);
 
     int ret = ToolRunner.run(conf1, new PointInTimeRestoreDriver(), args);
     assertNotEquals("Restore should fail since the requested restore time is in the future", 0,
       ret);
 
     // Case 2: Requested restore time is too old (beyond the retention window, should fail)
-    args = PITRTestUtil.buildPITRArgs(new TableName[] { table1 },
+    args = buildPITRArgs(new TableName[] { table1 },
       new TableName[] { TableName.valueOf("restoredTable1") },
-      EnvironmentEdgeManager.currentTime() - 40 * ONE_DAY_IN_MILLISECONDS, null);
+      EnvironmentEdgeManager.currentTime() - 40 * ONE_DAY_IN_MILLISECONDS);
 
     ret = ToolRunner.run(conf1, new PointInTimeRestoreDriver(), args);
     assertNotEquals(
@@ -174,9 +162,9 @@ public class TestPointInTimeRestore extends TestBackupBase {
    */
   @Test
   public void testPointInTimeRestore_ContinuousBackupNotEnabledTables() throws Exception {
-    String[] args = PITRTestUtil.buildPITRArgs(new TableName[] { table3 },
+    String[] args = buildPITRArgs(new TableName[] { table3 },
       new TableName[] { TableName.valueOf("restoredTable1") },
-      EnvironmentEdgeManager.currentTime() - 10 * ONE_DAY_IN_MILLISECONDS, null);
+      EnvironmentEdgeManager.currentTime() - 10 * ONE_DAY_IN_MILLISECONDS);
 
     int ret = ToolRunner.run(conf1, new PointInTimeRestoreDriver(), args);
     assertNotEquals("Restore should fail since continuous backup is not enabled for the table", 0,
@@ -188,9 +176,9 @@ public class TestPointInTimeRestore extends TestBackupBase {
    */
   @Test
   public void testPointInTimeRestore_TablesWithNoProperBackupOrWals() throws Exception {
-    String[] args = PITRTestUtil.buildPITRArgs(new TableName[] { table2 },
+    String[] args = buildPITRArgs(new TableName[] { table2 },
       new TableName[] { TableName.valueOf("restoredTable1") },
-      EnvironmentEdgeManager.currentTime() - 16 * ONE_DAY_IN_MILLISECONDS, null);
+      EnvironmentEdgeManager.currentTime() - 16 * ONE_DAY_IN_MILLISECONDS);
 
     int ret = ToolRunner.run(conf1, new PointInTimeRestoreDriver(), args);
     assertNotEquals(
@@ -206,17 +194,15 @@ public class TestPointInTimeRestore extends TestBackupBase {
     TableName restoredTable = TableName.valueOf("restoredTable");
 
     // Perform restore operation
-    String[] args =
-      PITRTestUtil.buildPITRArgs(new TableName[] { table1 }, new TableName[] { restoredTable },
-        EnvironmentEdgeManager.currentTime() - 5 * ONE_DAY_IN_MILLISECONDS, null);
+    String[] args = buildPITRArgs(new TableName[] { table1 }, new TableName[] { restoredTable },
+      EnvironmentEdgeManager.currentTime() - 5 * ONE_DAY_IN_MILLISECONDS);
 
     int ret = ToolRunner.run(conf1, new PointInTimeRestoreDriver(), args);
     assertEquals("Restore should succeed", 0, ret);
 
     // Validate that the restored table contains the same number of rows as the original table
     assertEquals("Restored table should have the same row count as the original",
-      PITRTestUtil.getRowCount(TEST_UTIL, table1),
-      PITRTestUtil.getRowCount(TEST_UTIL, restoredTable));
+      getRowCount(table1), getRowCount(restoredTable));
   }
 
   /**
@@ -228,19 +214,64 @@ public class TestPointInTimeRestore extends TestBackupBase {
     TableName restoredTable2 = TableName.valueOf("restoredTable2");
 
     // Perform restore operation for multiple tables
-    String[] args = PITRTestUtil.buildPITRArgs(new TableName[] { table1, table2 },
+    String[] args = buildPITRArgs(new TableName[] { table1, table2 },
       new TableName[] { restoredTable1, restoredTable2 },
-      EnvironmentEdgeManager.currentTime() - 5 * ONE_DAY_IN_MILLISECONDS, null);
+      EnvironmentEdgeManager.currentTime() - 5 * ONE_DAY_IN_MILLISECONDS);
 
     int ret = ToolRunner.run(conf1, new PointInTimeRestoreDriver(), args);
     assertEquals("Restore should succeed", 0, ret);
 
     // Validate that the restored tables contain the same number of rows as the originals
     assertEquals("Restored table1 should have the same row count as the original",
-      PITRTestUtil.getRowCount(TEST_UTIL, table1),
-      PITRTestUtil.getRowCount(TEST_UTIL, restoredTable1));
+      getRowCount(table1), getRowCount(restoredTable1));
     assertEquals("Restored table2 should have the same row count as the original",
-      PITRTestUtil.getRowCount(TEST_UTIL, table2),
-      PITRTestUtil.getRowCount(TEST_UTIL, restoredTable2));
+      getRowCount(table2), getRowCount(restoredTable2));
+  }
+
+  private String[] buildPITRArgs(TableName[] sourceTables, TableName[] targetTables, long endTime) {
+    String sourceTableNames =
+      Arrays.stream(sourceTables).map(TableName::getNameAsString).collect(Collectors.joining(","));
+
+    String targetTableNames =
+      Arrays.stream(targetTables).map(TableName::getNameAsString).collect(Collectors.joining(","));
+
+    return new String[] { "-" + OPTION_TABLE, sourceTableNames, "-" + OPTION_TABLE_MAPPING,
+      targetTableNames, "-" + OPTION_TO_DATETIME, String.valueOf(endTime) };
+  }
+
+  private static String[] buildBackupArgs(String backupType, TableName[] tables,
+    boolean continuousEnabled) {
+    String tableNames =
+      Arrays.stream(tables).map(TableName::getNameAsString).collect(Collectors.joining(","));
+
+    if (continuousEnabled) {
+      return new String[] { "create", backupType, BACKUP_ROOT_DIR, "-" + OPTION_TABLE, tableNames,
+        "-" + OPTION_ENABLE_CONTINUOUS_BACKUP };
+    } else {
+      return new String[] { "create", backupType, BACKUP_ROOT_DIR, "-" + OPTION_TABLE, tableNames };
+    }
+  }
+
+  private static void loadRandomData(TableName tableName, int totalRows) throws IOException {
+    int rowSize = 32;
+    try (Table table = TEST_UTIL.getConnection().getTable(tableName)) {
+      TEST_UTIL.loadRandomRows(table, famName, rowSize, totalRows);
+    }
+  }
+
+  private static void waitForReplication() {
+    LOG.info("Waiting for replication to complete for {} ms", WAIT_FOR_REPLICATION_MS);
+    try {
+      Thread.sleep(WAIT_FOR_REPLICATION_MS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException("Thread was interrupted while waiting", e);
+    }
+  }
+
+  private int getRowCount(TableName tableName) throws IOException {
+    try (Table table = TEST_UTIL.getConnection().getTable(tableName)) {
+      return HBaseTestingUtil.countRows(table);
+    }
   }
 }
