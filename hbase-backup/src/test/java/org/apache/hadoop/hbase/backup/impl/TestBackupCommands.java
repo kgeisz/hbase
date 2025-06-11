@@ -17,14 +17,13 @@
  */
 package org.apache.hadoop.hbase.backup.impl;
 
-import static org.apache.hadoop.hbase.backup.BackupInfo.withState;
 import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.CONF_CONTINUOUS_BACKUP_WAL_DIR;
 import static org.apache.hadoop.hbase.backup.TestBackupDeleteWithCleanup.logDirectoryStructure;
 import static org.apache.hadoop.hbase.backup.TestBackupDeleteWithCleanup.setupBackupFolders;
+import static org.apache.hadoop.hbase.backup.replication.BackupFileSystemManager.BULKLOAD_FILES_DIR;
+import static org.apache.hadoop.hbase.backup.replication.BackupFileSystemManager.WALS_DIR;
+import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.DATE_FORMAT;
 import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.ONE_DAY_IN_MILLISECONDS;
-import static org.apache.hadoop.hbase.backup.util.BackupFileSystemManager.BULKLOAD_FILES_DIR;
-import static org.apache.hadoop.hbase.backup.util.BackupFileSystemManager.WALS_DIR;
-import static org.apache.hadoop.hbase.backup.util.BackupUtils.DATE_FORMAT;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -86,7 +85,7 @@ public class TestBackupCommands extends TestBackupBase {
 
     // Ordered as newest to oldest, will be reversed in the method
     List<BackupInfo> backupInfos = List.of(full2, inc, full1);
-    when(sysTable.getBackupHistory(withState(BackupInfo.BackupState.COMPLETE)))
+    when(sysTable.getBackupInfos(BackupInfo.BackupState.COMPLETE))
       .thenReturn(new ArrayList<>(backupInfos));
 
     // WHEN
@@ -136,7 +135,7 @@ public class TestBackupCommands extends TestBackupBase {
     fs.mkdirs(backupWalDir);
 
     long currentTime = EnvironmentEdgeManager.getDelegate().currentTime();
-    setupBackupFolders(fs, backupWalDir, currentTime); // Create 5 days of WAL/bulkload-files folder
+    setupBackupFolders(fs, backupWalDir, currentTime); // Create 5 days of WAL/bulk folders
 
     logDirectoryStructure(fs, backupWalDir, "Before cleanup:");
 
