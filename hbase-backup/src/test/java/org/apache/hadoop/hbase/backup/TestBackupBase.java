@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hbase.backup;
 
+import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.CONTINUOUS_BACKUP_REPLICATION_PEER;
 import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.CONF_BACKUP_MAX_WAL_SIZE;
 import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.CONF_STAGED_WAL_FLUSH_INITIAL_DELAY;
 import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.CONF_STAGED_WAL_FLUSH_INTERVAL;
@@ -397,12 +398,13 @@ public class TestBackupBase {
     return request;
   }
 
-  protected BackupRequest createBackupRequest(BackupType type, List<TableName> tables,
-    String rootDir, boolean noChecksumVerify, boolean isContinuousBackupEnabled) {
+  protected BackupRequest createBackupRequest(BackupType type, List<TableName> tables, String path,
+    boolean noChecksumVerify, boolean continuousBackupEnabled) {
     BackupRequest.Builder builder = new BackupRequest.Builder();
-    return builder.withBackupType(type).withTableList(tables).withTargetRootDir(rootDir)
-      .withNoChecksumVerify(noChecksumVerify).withContinuousBackupEnabled(isContinuousBackupEnabled)
-      .build();
+    BackupRequest request = builder.withBackupType(type).withTableList(tables)
+      .withTargetRootDir(path).withNoChecksumVerify(noChecksumVerify)
+      .withContinuousBackupEnabled(continuousBackupEnabled).build();
+    return request;
   }
 
   protected String backupTables(BackupType type, List<TableName> tables, String path)
@@ -551,12 +553,6 @@ public class TestBackupBase {
     while (it.hasNext()) {
       LOG.debug(Objects.toString(it.next().getPath()));
     }
-  }
-
-  BackupManifest getLatestBackupManifest(List<BackupInfo> backups) throws IOException {
-    BackupInfo newestBackup = backups.get(0);
-    return HBackupFileSystem.getManifest(conf1, new Path(BACKUP_ROOT_DIR),
-      newestBackup.getBackupId());
   }
 
   void deleteContinuousBackupReplicationPeerIfExists(Admin admin) throws IOException {
