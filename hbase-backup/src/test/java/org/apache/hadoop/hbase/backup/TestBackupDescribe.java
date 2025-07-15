@@ -21,15 +21,16 @@ import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.CONF_CONTINU
 import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.OPTION_ENABLE_CONTINUOUS_BACKUP;
 import static org.apache.hadoop.hbase.replication.regionserver.ReplicationMarkerChore.REPLICATION_MARKER_ENABLED_DEFAULT;
 import static org.apache.hadoop.hbase.replication.regionserver.ReplicationMarkerChore.REPLICATION_MARKER_ENABLED_KEY;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.List;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.HBaseClassTestRule;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.backup.BackupInfo.BackupState;
 import org.apache.hadoop.hbase.backup.impl.BackupCommands;
@@ -128,7 +129,7 @@ public class TestBackupDescribe extends TestBackupBase {
       String[] backupArgs = new String[] { "create", BackupType.FULL.name(), BACKUP_ROOT_DIR, "-t",
         table1.getNameAsString(), "-" + OPTION_ENABLE_CONTINUOUS_BACKUP };
       int ret = ToolRunner.run(conf1, new BackupDriver(), backupArgs);
-      assertEquals(0, ret, "Backup should succeed");
+      assertEquals("Backup should succeed", 0, ret);
       List<BackupInfo> backups = table.getBackupHistory();
       String backupId = backups.get(0).getBackupId();
       assertTrue(checkSucceeded(backupId));
@@ -164,7 +165,7 @@ public class TestBackupDescribe extends TestBackupBase {
       backupArgs = new String[] { "create", BackupType.INCREMENTAL.name(), BACKUP_ROOT_DIR, "-t",
         table1.getNameAsString() };
       ret = ToolRunner.run(conf1, new BackupDriver(), backupArgs);
-      assertEquals(0, ret, "Incremental Backup should succeed");
+      assertEquals("Incremental Backup should succeed", 0, ret);
       backups = table.getBackupHistory();
       String incrBackupId = backups.get(0).getBackupId();
       assertTrue(checkSucceeded(incrBackupId));
