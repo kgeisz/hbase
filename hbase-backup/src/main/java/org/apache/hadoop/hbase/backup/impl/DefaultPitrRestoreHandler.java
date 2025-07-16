@@ -17,8 +17,6 @@
  */
 package org.apache.hadoop.hbase.backup.impl;
 
-import static org.apache.hadoop.hbase.backup.BackupInfo.withState;
-
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -50,7 +48,7 @@ public class DefaultPitrRestoreHandler extends AbstractPitrRestoreHandler {
   protected List<PitrBackupMetadata> getBackupMetadata(PointInTimeRestoreRequest request)
     throws IOException {
     try (BackupSystemTable table = new BackupSystemTable(conn)) {
-      return table.getBackupHistory(withState(BackupInfo.BackupState.COMPLETE)).stream()
+      return table.getBackupInfos(BackupInfo.BackupState.COMPLETE).stream()
         .map(BackupInfoAdapter::new).collect(Collectors.toList());
     }
   }
