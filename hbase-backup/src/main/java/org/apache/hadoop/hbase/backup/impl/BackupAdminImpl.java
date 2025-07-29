@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hbase.backup.impl;
 
+import com.google.errorprone.annotations.RestrictedApi;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
