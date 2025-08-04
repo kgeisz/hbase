@@ -1573,6 +1573,7 @@ class Client(Iface):
         self.recv_mutateRow()
 
     def send_mutateRow(self, tableName, row, mutations, attributes):
+        print("kevin: START send_mutateRow()")
         self._oprot.writeMessageBegin('mutateRow', TMessageType.CALL, self._seqid)
         args = mutateRow_args()
         args.tableName = tableName
@@ -1580,8 +1581,10 @@ class Client(Iface):
         args.mutations = mutations
         args.attributes = attributes
         args.write(self._oprot)
+        print(f"kevin: mutateRow_args = {args}")
         self._oprot.writeMessageEnd()
         self._oprot.trans.flush()
+        print("kevin: END send_mutateRow()")
 
     def recv_mutateRow(self):
         iprot = self._iprot

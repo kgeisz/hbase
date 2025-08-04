@@ -640,6 +640,11 @@ public class ThriftHBaseServiceHandler extends HBaseServiceHandler implements Hb
     Table table = null;
     try {
       table = getTable(tableName);
+      byte[] byteRow = getBytes(row);
+      if (byteRow.length == 0) {
+        LOG.info("tableName = {}, ByteBuffer row = {}, byteRow = {}, byteRow.length = {}, mutations = {}, timestamp = {}, attributes = {}",
+          tableName.toString(), row, byteRow, byteRow.length, mutations, timestamp, attributes);
+      }
       Put put = new Put(getBytes(row), timestamp);
       addAttributes(put, attributes);
 

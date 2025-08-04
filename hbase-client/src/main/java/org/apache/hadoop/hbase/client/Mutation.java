@@ -666,7 +666,8 @@ public abstract class Mutation extends OperationWithAttributes
       throw new IllegalArgumentException("Row buffer is null");
     }
     if (length == 0) {
-      throw new IllegalArgumentException("Row length is 0");
+      throw new IllegalArgumentException("Row length is 0. row = " + Arrays.toString(row) +
+      " offset = " + offset + " length = " + length);
     }
     if (length > HConstants.MAX_ROW_LENGTH) {
       throw new IllegalArgumentException(
