@@ -31,12 +31,27 @@ def printVersions(row, versions):
     print(cell.value.decode() + "; ", end=' ')
   print()
 
-def printRow(entry):
-  print("row: " + entry.row.decode() + ", cols:", end=' ')
-  for k in sorted(entry.columns):
-    print(k.decode() + " => " + entry.columns[k].value.decode(), end=' ')
-  print()
+"""
+Attempt to decode with different codecs. If decoding for one codec fails,
+then suppress the exception and try with another codec. Throw an error
+if all codecs are tried and each one results in an exception.
+"""
+def printRow(entry, codecs=('utf8', 'cp037')):
+  exc = None
+  for codec in codecs:
+    try:
+      printDecodedRow(entry, codec)
+      return
+    except UnicodeDecodeError as e:
+      exc = e
+  if exc:
+    raise exc
 
+def printDecodedRow(entry, codec):
+  print("row: " + entry.row.decode(codec) + ", cols:", end=' ')
+  for k in sorted(entry.columns):
+    print(k.decode(codec) + " => " + entry.columns[k].value.decode(codec), end=' ')
+  print()
 
 def demo_client(host, port, is_framed_transport):
 
@@ -101,10 +116,10 @@ def demo_client(host, port, is_framed_transport):
 
   dummy_attributes = {}
   #
-  # Test UTF-8 handling
+  # Test utf8 handling
   #
   non_utf8 = bytes("foo-\xfc\xa1\xa1\xa1\xa1\xa1", 'cp037')  # IBM037, IBM039 encoding
-  valid_utf8 = bytes("foo-\xE7\x94\x9F\xE3\x83\x93\xE3\x83\xBC\xE3\x83\xAB", 'utf-8')
+  valid_utf8 = bytes("foo-\xE7\x94\x9F\xE3\x83\x93\xE3\x83\xBC\xE3\x83\xAB", 'utf8')
 
   # non-utf8 is fine for data
   mutations = [Mutation(column=b"entry:foo",value=non_utf8)]
@@ -131,7 +146,7 @@ def demo_client(host, port, is_framed_transport):
 
   # Run a scanner on the rows we just created
   print("Starting scanner...")
-  scanner = client.scannerOpen(demo_table, b"", [b"entry:"], dummy_attributes)
+  scanner = client.scannerOpen(demo_table, b"", [b"entry"], dummy_attributes)
 
   r = client.scannerGet(scanner)
   while r:
@@ -144,7 +159,7 @@ def demo_client(host, port, is_framed_transport):
   #
   for e in range(100, 0, -1):
     # format row keys as "00000" to "00100"
-    row = bytes(f"{e:05}", 'utf-8')
+    row = bytes(f"{e:05}", 'utf8')
     print(f"kevin: row = {row}")
 
     mutations = [Mutation(column=b"unused:", value=b"DELETE_ME")]
@@ -156,12 +171,12 @@ def demo_client(host, port, is_framed_transport):
                  Mutation(column=b"entry:foo", value=b"FOO")]
     print(f"kevin: {str(mutations)}")
     client.mutateRow(demo_table, row, mutations, dummy_attributes)
-    # TODO - client.getRow() is throwing an IndexError
+    # TODO - client.getRow() is returning an empty list
     print(f"kevin: (row: {row}): trying to get row")
     print(f"kevin: t = {demo_table}")
     print(f"kevin: row = {row}")
     print(f"kevin: dummy_attributes = {dummy_attributes}")
-    time.sleep(1)
+    # time.sleep(1)
     # retrieved_row = None
     # for i in range(1, 6):
     #     print(f"kevin: Attempt {i} for getRow()")
@@ -178,8 +193,8 @@ def demo_client(host, port, is_framed_transport):
     client.mutateRow(demo_table, row, mutations, dummy_attributes)
     printRow(client.getRow(demo_table, row, dummy_attributes)[0])
 
-    mutations = [Mutation(column=b"entry:num", value=bytes(str(e), 'utf-8')),
-                 Mutation(column=b"entry:sqr", value=bytes(str(e*e), 'utf-8'))]
+    mutations = [Mutation(column=b"entry:num", value=bytes(str(e), 'utf8')),
+                 Mutation(column=b"entry:sqr", value=bytes(str(e*e), 'utf8'))]
     client.mutateRow(demo_table, row, mutations, dummy_attributes)
     printRow(client.getRow(demo_table, row, dummy_attributes)[0])
 
@@ -208,7 +223,7 @@ def demo_client(host, port, is_framed_transport):
     desc_name = desc.name.decode()
     print(f"column with name: {desc_name}")
     print(desc)
-    columnNames.append(bytes(f"{desc_name}:", 'utf-8'))
+    columnNames.append(bytes(f"{desc_name}:", 'utf8'))
 
   print("Starting scanner...")
   scanner = client.scannerOpenWithStop(demo_table, b"00020", b"00040", columnNames, dummy_attributes)
