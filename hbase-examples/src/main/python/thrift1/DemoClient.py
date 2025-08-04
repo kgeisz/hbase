@@ -26,15 +26,15 @@ from gen_py.hbase import ttypes
 from gen_py.hbase.Hbase import Client, ColumnDescriptor, Mutation
 
 def printVersions(row, versions):
-  print("row: " + row + ", values: ", end=' ')
+  print("row: " + row.decode() + ", values: ", end=' ')
   for cell in versions:
-    print(cell.value + "; ", end=' ')
+    print(cell.value.decode() + "; ", end=' ')
   print()
 
 def printRow(entry):
-  print("row: " + entry.row + ", cols:", end=' ')
+  print("row: " + entry.row.decode() + ", cols:", end=' ')
   for k in sorted(entry.columns):
-    print(k + " => " + entry.columns[k].value, end=' ')
+    print(k.decode() + " => " + entry.columns[k].value.decode(), end=' ')
   print()
 
 
@@ -63,7 +63,7 @@ def demo_client(host, port, is_framed_transport):
   if serverType != ttypes.TThriftServerType.ONE:
     raise RuntimeError(f"Mismatch between client and server, server type is {serverType}")
 
-  t = "demo_table"
+  demo_table = b"demo_table"
 
   #
   # Scan all tables, look for the demo table and delete it.
@@ -71,30 +71,30 @@ def demo_client(host, port, is_framed_transport):
   print("scanning tables...")
   for table in client.getTableNames():
     print(f"  found: {table}")
-    if table == t:
+    if table == demo_table:
       if client.isTableEnabled(table):
-        print(f"    disabling table: {t}")
+        print(f"    disabling table: {demo_table}")
         client.disableTable(table)
-      print(f"    deleting table: {t}")
+      print(f"    deleting table: {demo_table}")
       client.deleteTable(table)
 
   columns = []
   col = ColumnDescriptor()
-  col.name = 'entry:'
+  col.name = b'entry:'
   col.maxVersions = 10
   columns.append(col)
   col = ColumnDescriptor()
-  col.name = 'unused:'
+  col.name = b'unused:'
   columns.append(col)
 
   try:
-    print(f"creating table: {t}")
-    client.createTable(t, columns)
+    print(f"creating table: {demo_table}")
+    client.createTable(demo_table, columns)
   except ttypes.AlreadyExists as ae:
     print("WARN: " + ae.message)
 
-  cols = client.getColumnDescriptors(t)
-  print(f"column families in {t}")
+  cols = client.getColumnDescriptors(demo_table)
+  print(f"column families in {demo_table}")
   for col_name in cols.keys():
     col = cols[col_name]
     print(f"  column: {col.name}, maxVer: {col.maxVersions}")
@@ -103,32 +103,35 @@ def demo_client(host, port, is_framed_transport):
   #
   # Test UTF-8 handling
   #
-  invalid = "foo-\xfc\xa1\xa1\xa1\xa1\xa1"
-  valid = "foo-\xE7\x94\x9F\xE3\x83\x93\xE3\x83\xBC\xE3\x83\xAB";
+  non_utf8 = bytes("foo-\xfc\xa1\xa1\xa1\xa1\xa1", 'cp037')  # IBM037, IBM039 encoding
+  valid_utf8 = bytes("foo-\xE7\x94\x9F\xE3\x83\x93\xE3\x83\xBC\xE3\x83\xAB", 'utf-8')
 
   # non-utf8 is fine for data
-  mutations = [Mutation(column="entry:foo",value=invalid)]
+  mutations = [Mutation(column=b"entry:foo",value=non_utf8)]
   print(str(mutations))
-  client.mutateRow(t, "foo", mutations, dummy_attributes)
+  client.mutateRow(demo_table, b"foo", mutations, dummy_attributes)
 
   # try empty strings
-  mutations = [Mutation(column="entry:", value="")]
-  client.mutateRow(t, "", mutations, dummy_attributes)
+  try:
+    mutations = [Mutation(column=b"entry:", value=b"")]
+    client.mutateRow(demo_table, b"", mutations, dummy_attributes)
+  except ttypes.IllegalArgument as e:
+      print(f'expected exception: {e.message}')
 
   # this row name is valid utf8
-  mutations = [Mutation(column="entry:foo", value=valid)]
-  client.mutateRow(t, valid, mutations, dummy_attributes)
+  mutations = [Mutation(column=b"entry:foo", value=valid_utf8)]
+  client.mutateRow(demo_table, valid_utf8, mutations, dummy_attributes)
 
   # non-utf8 is not allowed in row names
   try:
-    mutations = [Mutation(column="entry:foo", value=invalid)]
-    client.mutateRow(t, invalid, mutations, dummy_attributes)
+    mutations = [Mutation(column=b"entry:foo", value=non_utf8)]
+    client.mutateRow(demo_table, non_utf8, mutations, dummy_attributes)
   except ttypes.IOError as e:
     print(f'expected exception: {e.message}')
 
   # Run a scanner on the rows we just created
   print("Starting scanner...")
-  scanner = client.scannerOpen(t, "", ["entry:"], dummy_attributes)
+  scanner = client.scannerOpen(demo_table, b"", [b"entry:"], dummy_attributes)
 
   r = client.scannerGet(scanner)
   while r:
@@ -141,54 +144,74 @@ def demo_client(host, port, is_framed_transport):
   #
   for e in range(100, 0, -1):
     # format row keys as "00000" to "00100"
-    row = f"{row:05}"
+    row = bytes(f"{e:05}", 'utf-8')
+    print(f"kevin: row = {row}")
 
-    mutations = [Mutation(column="unused:", value="DELETE_ME")]
-    client.mutateRow(t, row, mutations, dummy_attributes)
-    printRow(client.getRow(t, row, dummy_attributes)[0])
-    client.deleteAllRow(t, row, dummy_attributes)
+    mutations = [Mutation(column=b"unused:", value=b"DELETE_ME")]
+    client.mutateRow(demo_table, row, mutations, dummy_attributes)
+    printRow(client.getRow(demo_table, row, dummy_attributes)[0])
+    client.deleteAllRow(demo_table, row, dummy_attributes)
 
-    mutations = [Mutation(column="entry:num", value="0"),
-                 Mutation(column="entry:foo", value="FOO")]
-    client.mutateRow(t, row, mutations, dummy_attributes)
-    printRow(client.getRow(t, row, dummy_attributes)[0]);
+    mutations = [Mutation(column=b"entry:num", value=b"0"),
+                 Mutation(column=b"entry:foo", value=b"FOO")]
+    print(f"kevin: {str(mutations)}")
+    client.mutateRow(demo_table, row, mutations, dummy_attributes)
+    # TODO - client.getRow() is throwing an IndexError
+    print(f"kevin: (row: {row}): trying to get row")
+    print(f"kevin: t = {demo_table}")
+    print(f"kevin: row = {row}")
+    print(f"kevin: dummy_attributes = {dummy_attributes}")
+    time.sleep(1)
+    # retrieved_row = None
+    # for i in range(1, 6):
+    #     print(f"kevin: Attempt {i} for getRow()")
+    #     retrieved_row = client.getRow(t, row, dummy_attributes)
+    #     if retrieved_row:
+    #         break
+    #     time.sleep(0.2)
+    retrieved_row = client.getRow(demo_table, row, dummy_attributes)
+    print(f"kevin: retrieved_row: {retrieved_row}")
+    printRow(retrieved_row[0])
 
-    mutations = [Mutation(column="entry:foo",isDelete=True),
-                 Mutation(column="entry:num",value="-1")]
-    client.mutateRow(t, row, mutations, dummy_attributes)
-    printRow(client.getRow(t, row, dummy_attributes)[0])
+    mutations = [Mutation(column=b"entry:foo",isDelete=True),
+                 Mutation(column=b"entry:num",value=b"-1")]
+    client.mutateRow(demo_table, row, mutations, dummy_attributes)
+    printRow(client.getRow(demo_table, row, dummy_attributes)[0])
 
-    mutations = [Mutation(column="entry:num", value=str(e)),
-                 Mutation(column="entry:sqr", value=str(e*e))]
-    client.mutateRow(t, row, mutations, dummy_attributes)
-    printRow(client.getRow(t, row, dummy_attributes)[0])
+    mutations = [Mutation(column=b"entry:num", value=bytes(str(e), 'utf-8')),
+                 Mutation(column=b"entry:sqr", value=bytes(str(e*e), 'utf-8'))]
+    client.mutateRow(demo_table, row, mutations, dummy_attributes)
+    printRow(client.getRow(demo_table, row, dummy_attributes)[0])
 
-    time.sleep(0.05)
+    # time.sleep(0.05)
 
-    mutations = [Mutation(column="entry:num",value="-999"),
-                 Mutation(column="entry:sqr",isDelete=True)]
-    client.mutateRowTs(t, row, mutations, 1, dummy_attributes) # shouldn't override latest
-    printRow(client.getRow(t, row, dummy_attributes)[0])
+    mutations = [Mutation(column=b"entry:num",value=b"-999"),
+                 Mutation(column=b"entry:sqr",isDelete=True)]
+    client.mutateRowTs(demo_table, row, mutations, 1, dummy_attributes) # shouldn't override latest
+    printRow(client.getRow(demo_table, row, dummy_attributes)[0])
 
-    versions = client.getVer(t, row, "entry:num", 10, dummy_attributes)
+    versions = client.getVer(demo_table, row, b"entry:num", 10, dummy_attributes)
     printVersions(row, versions)
     if len(versions) != 3:
       print("FATAL: wrong # of versions")
       sys.exit(-1)
 
-    r = client.get(t, row, "entry:foo", dummy_attributes)
+    r = client.get(demo_table, row, b"entry:foo", dummy_attributes)
     # just to be explicit, we get lists back, if it's empty there was no matching row.
     if len(r) > 0:
       raise RuntimeError("shouldn't get here!")
 
+    print("----------------------------------")
+
   columnNames = []
-  for (col, desc) in client.getColumnDescriptors(t).items():
-    print("column with name: "+desc.name)
+  for (col, desc) in client.getColumnDescriptors(demo_table).items():
+    desc_name = desc.name.decode()
+    print(f"column with name: {desc_name}")
     print(desc)
-    columnNames.append(desc.name+":")
+    columnNames.append(bytes(f"{desc_name}:", 'utf-8'))
 
   print("Starting scanner...")
-  scanner = client.scannerOpenWithStop(t, "00020", "00040", columnNames, dummy_attributes)
+  scanner = client.scannerOpenWithStop(demo_table, b"00020", b"00040", columnNames, dummy_attributes)
 
   r = client.scannerGet(scanner)
   while r:
