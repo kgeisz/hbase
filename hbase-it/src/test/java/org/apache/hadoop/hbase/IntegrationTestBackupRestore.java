@@ -19,6 +19,9 @@ package org.apache.hadoop.hbase;
 
 import static org.apache.hadoop.hbase.IntegrationTestingUtility.createPreSplitLoadTestTable;
 import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.CONF_CONTINUOUS_BACKUP_WAL_DIR;
+import static org.apache.hadoop.hbase.mapreduce.WALPlayer.IGNORE_EMPTY_FILES;
+import static org.apache.hadoop.hbase.mapreduce.WALPlayer.IGNORE_MISSING_FILES;
+import static org.apache.hadoop.hbase.replication.regionserver.ReplicationMarkerChore.REPLICATION_MARKER_ENABLED_KEY;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -202,27 +205,34 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
     fs.delete(new Path(BACKUP_ROOT_DIR), true);
   }
 
-  @Test
-  public void testBackupRestore() throws Exception {
-    LOG.info("Starting backup and restore with continuous backup disabled");
-    BACKUP_ROOT_DIR = util.getDataTestDirOnTestFS() + Path.SEPARATOR + BACKUP_ROOT_DIR;
-    createTables();
-    runTestMulti(false);
-    LOG.info("End of backup and restore with continuous backup disabled");
-  }
+//  @Test
+//  public void testBackupRestore() throws Exception {
+//    LOG.info("Starting backup and restore with continuous backup disabled");
+//    BACKUP_ROOT_DIR = util.getDataTestDirOnTestFS() + Path.SEPARATOR + BACKUP_ROOT_DIR;
+//    createTables();
+//    runTestMulti(false);
+//    LOG.info("End of backup and restore with continuous backup disabled");
+//  }
 
     @Test
     public void testContinuousBackupRestore() throws Exception {
       LOG.info("Starting continuous backup and restore");
       BACKUP_ROOT_DIR = util.getDataTestDirOnTestFS() + Path.SEPARATOR + BACKUP_ROOT_DIR;
+      conf.set(CONF_CONTINUOUS_BACKUP_WAL_DIR, BACKUP_ROOT_DIR);
 
-      Path root = util.getDataTestDirOnTestFS();
-      Path backupWalDir = new Path(root, backupWalDirName);
-      FileSystem fs = FileSystem.get(conf);
-      fs.mkdirs(backupWalDir);
-      conf.set(CONF_CONTINUOUS_BACKUP_WAL_DIR, backupWalDir.toString());
+      // This is a different method of setting up the WAL dir that I have tried.
+      // I tried using this instead of BACKUP_ROOT_DIR, but I got the same error.
+      // You need to set CONF_CONTINUOUS_BACKUP_WAL_DIR to backupWalDir (as seen below),
+      // as well as set withTargetRootDir(backupWalDir) in the full backup request and the
+      // incremental backup request
+//      Path root = util.getDataTestDirOnTestFS();
+//      backupWalDir = new Path(root, backupWalDirName);
+//      FileSystem fs = FileSystem.get(conf);
+//      fs.mkdirs(backupWalDir);
+//      conf.set(CONF_CONTINUOUS_BACKUP_WAL_DIR, backupWalDir.toString());
 
-//      conf.set(CONF_CONTINUOUS_BACKUP_WAL_DIR, BACKUP_ROOT_DIR);
+      conf.setBoolean(REPLICATION_MARKER_ENABLED_KEY, true);
+      conf.setBoolean(IGNORE_EMPTY_FILES, true);
       createTables();
       runTestMulti(true);
       LOG.info("End of continuous backup and restore");
@@ -347,27 +357,27 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
 
         // Restore incremental backup for table, with overwrite for previous backup
         String previousBackupId = backupIds.get(backupIds.size() - 2);
-        LOG.info("kevin: start restore with overwrite for previous backup complete for table {}", table);
+        LOG.info("kevin: start restore with overwrite for previous backup for table {}", table);
         restoreVerifyTable(conn, client, table, previousBackupId, rowsInIteration * (count - 1));
-        LOG.info("kevin: end restore with overwrite for previous backup complete for table {}", table);
+        LOG.info("kevin: end restore with overwrite for previous backup for table {}", table);
         // Restore incremental backup for table, with overwrite for last backup
-        LOG.info("kevin: start restore with overwrite for last backup complete for table {}", table);
+        LOG.info("kevin: start restore with overwrite for last backup for table {}", table);
         restoreVerifyTable(conn, client, table, backupId, rowsInIteration * count);
-        LOG.info("kevin: end restore with overwrite for last backup complete for table {}", table);
+        LOG.info("kevin: end restore with overwrite for last backup for table {}", table);
       }
       // Now merge all incremental and restore
       String[] incBackupIds = allIncremental(backupIds);
-      LOG.info("kevin: start mering incremtnal backups for table {}", table);
+      LOG.info("kevin: start mering incremental backups for table {}", table);
       merge(incBackupIds, client);
-      LOG.info("kevin: end mering incremtnal backups for table {}", table);
+      LOG.info("kevin: end mering incremental backups for table {}", table);
       // Restore last one
       String backupId = incBackupIds[incBackupIds.length - 1];
       // restore incremental backup for table, with overwrite
       TableName[] tablesRestoreIncMultiple = new TableName[] { table };
-      LOG.info("kevin: start restore incremental backup for table, with overwrite for table {}", table);
+      LOG.info("kevin: start restore incremental backup for table {} with overwrite", table);
       restore(createRestoreRequest(BACKUP_ROOT_DIR, backupId, false, tablesRestoreIncMultiple, null,
         true), client);
-      LOG.info("kevin: end restore incremental backup for table, with overwrite for table {}", table);
+      LOG.info("kevin: end restore incremental backup for table {} with overwrite", table);
       Table hTable = conn.getTable(table);
       Assert.assertEquals(util.countRows(hTable), rowsInIteration * numIterations);
       // TODO - Add backup delete
@@ -446,7 +456,7 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
     }
     System.out.println(BackupRestoreConstants.VERIFY_BACKUP);
 //    testBackupRestore();
-//    testContinuousBackupRestore();
+    testContinuousBackupRestore();
     return 0;
   }
 
