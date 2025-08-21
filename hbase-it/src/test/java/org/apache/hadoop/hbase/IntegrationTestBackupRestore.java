@@ -219,18 +219,6 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
       LOG.info("Starting continuous backup and restore");
       BACKUP_ROOT_DIR = util.getDataTestDirOnTestFS() + Path.SEPARATOR + BACKUP_ROOT_DIR;
       conf.set(CONF_CONTINUOUS_BACKUP_WAL_DIR, BACKUP_ROOT_DIR);
-
-      // This is a different method of setting up the WAL dir that I have tried.
-      // I tried using this instead of BACKUP_ROOT_DIR, but I got the same error.
-      // You need to set CONF_CONTINUOUS_BACKUP_WAL_DIR to backupWalDir (as seen below),
-      // as well as set withTargetRootDir(backupWalDir) in the full backup request and the
-      // incremental backup request
-//      Path root = util.getDataTestDirOnTestFS();
-//      backupWalDir = new Path(root, backupWalDirName);
-//      FileSystem fs = FileSystem.get(conf);
-//      fs.mkdirs(backupWalDir);
-//      conf.set(CONF_CONTINUOUS_BACKUP_WAL_DIR, backupWalDir.toString());
-
       conf.setBoolean(REPLICATION_MARKER_ENABLED_KEY, true);
       conf.setBoolean(IGNORE_EMPTY_FILES, true);
       createTables();
