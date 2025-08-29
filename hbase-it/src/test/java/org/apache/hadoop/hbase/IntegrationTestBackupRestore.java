@@ -22,12 +22,15 @@ import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.CONF_CONTINU
 import static org.apache.hadoop.hbase.mapreduce.WALPlayer.IGNORE_EMPTY_FILES;
 import static org.apache.hadoop.hbase.mapreduce.WALPlayer.IGNORE_MISSING_FILES;
 import static org.apache.hadoop.hbase.replication.regionserver.ReplicationMarkerChore.REPLICATION_MARKER_ENABLED_KEY;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -54,7 +57,10 @@ import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.client.TableDescriptor;
 import org.apache.hadoop.hbase.client.TableDescriptorBuilder;
 import org.apache.hadoop.hbase.testclassification.IntegrationTests;
+import org.apache.hadoop.hbase.tool.BulkLoadHFiles;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
+import org.apache.hadoop.hbase.util.HFileTestUtil;
 import org.apache.hadoop.util.ToolRunner;
 import org.junit.After;
 import org.junit.Assert;
@@ -107,7 +113,7 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
   protected static Object lock = new Object();
 
   private static String BACKUP_ROOT_DIR = "backupIT";
-  private static final String backupWalDirName = CLASS_NAME + "Dir";
+  private static final String backupWalDirName = CLASS_NAME + "WalDir";
   private Configuration conf;
 
   Path backupWalDir;
@@ -205,20 +211,29 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
     fs.delete(new Path(BACKUP_ROOT_DIR), true);
   }
 
-//  @Test
-//  public void testBackupRestore() throws Exception {
-//    LOG.info("Starting backup and restore with continuous backup disabled");
-//    BACKUP_ROOT_DIR = util.getDataTestDirOnTestFS() + Path.SEPARATOR + BACKUP_ROOT_DIR;
-//    createTables();
-//    runTestMulti(false);
-//    LOG.info("End of backup and restore with continuous backup disabled");
-//  }
+  @Test
+  public void testBackupRestore() throws Exception {
+    LOG.info("Starting backup and restore with continuous backup disabled");
+    BACKUP_ROOT_DIR = util.getDataTestDirOnTestFS() + Path.SEPARATOR + BACKUP_ROOT_DIR;
+    createTables();
+    runTestMulti(false);
+    LOG.info("End of backup and restore with continuous backup disabled");
+  }
 
     @Test
     public void testContinuousBackupRestore() throws Exception {
       LOG.info("Starting continuous backup and restore");
       BACKUP_ROOT_DIR = util.getDataTestDirOnTestFS() + Path.SEPARATOR + BACKUP_ROOT_DIR;
-      conf.set(CONF_CONTINUOUS_BACKUP_WAL_DIR, BACKUP_ROOT_DIR);
+
+      Path root = util.getDataTestDirOnTestFS();
+      backupWalDir = new Path(root, backupWalDirName);
+      FileSystem fs = FileSystem.get(conf);
+      fs.mkdirs(backupWalDir);
+      LOG.info("kevin: backupWalDir = {}", backupWalDir);
+      LOG.info("kevin: BACKUP_ROOT_DIR = {}", BACKUP_ROOT_DIR);
+
+      conf.set(CONF_CONTINUOUS_BACKUP_WAL_DIR, backupWalDir.toString());
+//      conf.set(CONF_CONTINUOUS_BACKUP_WAL_DIR, BACKUP_ROOT_DIR);
       conf.setBoolean(REPLICATION_MARKER_ENABLED_KEY, true);
       conf.setBoolean(IGNORE_EMPTY_FILES, true);
       createTables();
@@ -338,10 +353,10 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
           .withContinuousBackupEnabled(isContinuousBackupEnabled)
           .withTargetRootDir(BACKUP_ROOT_DIR).build();
         LOG.info("kevin: start incremental backup for table {}", table);
-        String backupId = backup(request, client);
-        assertTrue(checkSucceeded(backupId));
+        String backupIdIncr = backup(request, client);
+        assertTrue(checkSucceeded(backupIdIncr));
         LOG.info("kevin: end incremental backup for table {}. id = {}", table, backupIdFull);
-        backupIds.add(backupId);
+        backupIds.add(backupIdIncr);
 
         // Restore incremental backup for table, with overwrite for previous backup
         String previousBackupId = backupIds.get(backupIds.size() - 2);
@@ -350,7 +365,7 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
         LOG.info("kevin: end restore with overwrite for previous backup for table {}", table);
         // Restore incremental backup for table, with overwrite for last backup
         LOG.info("kevin: start restore with overwrite for last backup for table {}", table);
-        restoreVerifyTable(conn, client, table, backupId, rowsInIteration * count);
+        restoreVerifyTable(conn, client, table, backupIdIncr, rowsInIteration * count);
         LOG.info("kevin: end restore with overwrite for last backup for table {}", table);
       }
       // Now merge all incremental and restore
@@ -372,6 +387,23 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
       hTable.close();
       LOG.info("{} loop {} finished.", Thread.currentThread().getName(), (count - 1));
     }
+  }
+
+  private void performBulkLoad(String keyPrefix, String testDir, TableName tableName)
+    throws IOException {
+    FileSystem fs = util.getTestFileSystem();
+    Path baseDirectory = util.getDataTestDirOnTestFS(testDir);
+    Path hfilePath =
+      new Path(baseDirectory, COLUMN_NAME + Path.SEPARATOR + "hfile_" + keyPrefix);
+
+    HFileTestUtil.createHFile(util.getConfiguration(), fs, hfilePath, COLUMN_NAME.getBytes(), null,
+      Bytes.toBytes(keyPrefix), Bytes.toBytes(keyPrefix + "z"), rowsInIteration);
+
+//    listFiles(fs, baseDirectory, baseDirectory);
+
+    Map<BulkLoadHFiles.LoadQueueItem, ByteBuffer> result =
+      BulkLoadHFiles.create(util.getConfiguration()).bulkLoad(tableName, baseDirectory);
+    assertFalse(result.isEmpty());
   }
 
   private void restoreVerifyTable(Connection conn, BackupAdmin client, TableName table,
