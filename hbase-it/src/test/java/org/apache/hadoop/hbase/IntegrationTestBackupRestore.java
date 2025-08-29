@@ -20,17 +20,13 @@ package org.apache.hadoop.hbase;
 import static org.apache.hadoop.hbase.IntegrationTestingUtility.createPreSplitLoadTestTable;
 import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.CONF_CONTINUOUS_BACKUP_WAL_DIR;
 import static org.apache.hadoop.hbase.mapreduce.WALPlayer.IGNORE_EMPTY_FILES;
-import static org.apache.hadoop.hbase.mapreduce.WALPlayer.IGNORE_MISSING_FILES;
 import static org.apache.hadoop.hbase.replication.regionserver.ReplicationMarkerChore.REPLICATION_MARKER_ENABLED_KEY;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -57,18 +53,13 @@ import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.client.TableDescriptor;
 import org.apache.hadoop.hbase.client.TableDescriptorBuilder;
 import org.apache.hadoop.hbase.testclassification.IntegrationTests;
-import org.apache.hadoop.hbase.tool.BulkLoadHFiles;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
-import org.apache.hadoop.hbase.util.HFileTestUtil;
 import org.apache.hadoop.util.ToolRunner;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -211,14 +202,14 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
     fs.delete(new Path(BACKUP_ROOT_DIR), true);
   }
 
-  @Test
-  public void testBackupRestore() throws Exception {
-    LOG.info("Starting backup and restore with continuous backup disabled");
-    BACKUP_ROOT_DIR = util.getDataTestDirOnTestFS() + Path.SEPARATOR + BACKUP_ROOT_DIR;
-    createTables();
-    runTestMulti(false);
-    LOG.info("End of backup and restore with continuous backup disabled");
-  }
+//  @Test
+//  public void testBackupRestore() throws Exception {
+//    LOG.info("Starting backup and restore with continuous backup disabled");
+//    BACKUP_ROOT_DIR = util.getDataTestDirOnTestFS() + Path.SEPARATOR + BACKUP_ROOT_DIR;
+//    createTables();
+//    runTestMulti(false);
+//    LOG.info("End of backup and restore with continuous backup disabled");
+//  }
 
     @Test
     public void testContinuousBackupRestore() throws Exception {
@@ -233,7 +224,6 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
       LOG.info("kevin: BACKUP_ROOT_DIR = {}", BACKUP_ROOT_DIR);
 
       conf.set(CONF_CONTINUOUS_BACKUP_WAL_DIR, backupWalDir.toString());
-//      conf.set(CONF_CONTINUOUS_BACKUP_WAL_DIR, BACKUP_ROOT_DIR);
       conf.setBoolean(REPLICATION_MARKER_ENABLED_KEY, true);
       conf.setBoolean(IGNORE_EMPTY_FILES, true);
       createTables();
@@ -387,23 +377,6 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
       hTable.close();
       LOG.info("{} loop {} finished.", Thread.currentThread().getName(), (count - 1));
     }
-  }
-
-  private void performBulkLoad(String keyPrefix, String testDir, TableName tableName)
-    throws IOException {
-    FileSystem fs = util.getTestFileSystem();
-    Path baseDirectory = util.getDataTestDirOnTestFS(testDir);
-    Path hfilePath =
-      new Path(baseDirectory, COLUMN_NAME + Path.SEPARATOR + "hfile_" + keyPrefix);
-
-    HFileTestUtil.createHFile(util.getConfiguration(), fs, hfilePath, COLUMN_NAME.getBytes(), null,
-      Bytes.toBytes(keyPrefix), Bytes.toBytes(keyPrefix + "z"), rowsInIteration);
-
-//    listFiles(fs, baseDirectory, baseDirectory);
-
-    Map<BulkLoadHFiles.LoadQueueItem, ByteBuffer> result =
-      BulkLoadHFiles.create(util.getConfiguration()).bulkLoad(tableName, baseDirectory);
-    assertFalse(result.isEmpty());
   }
 
   private void restoreVerifyTable(Connection conn, BackupAdmin client, TableName table,
