@@ -24,9 +24,7 @@ import static org.apache.hadoop.hbase.replication.regionserver.ReplicationMarker
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URLDecoder;
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -36,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TimeZone;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -937,5 +936,14 @@ public final class BackupUtils {
   private static boolean continuousBackupReplicationPeerExists(Admin admin) throws IOException {
     return admin.listReplicationPeers().stream()
       .anyMatch(peer -> peer.getPeerId().equals(CONTINUOUS_BACKUP_REPLICATION_PEER));
+  }
+
+  /**
+   * Convert dayInMillis to "yyyy-MM-dd" format
+   */
+  public static String formatToDateString(long dayInMillis) {
+    SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);
+    dateFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
+    return dateFormat.format(new Date(dayInMillis));
   }
 }

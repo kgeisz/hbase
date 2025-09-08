@@ -19,11 +19,8 @@ package org.apache.hadoop.hbase.backup.replication;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -38,6 +35,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.backup.impl.BackupSystemTable;
+import org.apache.hadoop.hbase.backup.util.BackupUtils;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.io.asyncfs.monitor.StreamSlowMonitor;
@@ -90,7 +88,6 @@ public class ContinuousBackupReplicationEndpoint extends BaseReplicationEndpoint
 
   public static final long ONE_DAY_IN_MILLISECONDS = TimeUnit.DAYS.toMillis(1);
   public static final String WAL_FILE_PREFIX = "wal_file.";
-  public static final String DATE_FORMAT = "yyyy-MM-dd";
 
   @Override
   public void init(Context context) throws IOException {
@@ -315,7 +312,7 @@ public class ContinuousBackupReplicationEndpoint extends BaseReplicationEndpoint
   }
 
   private FSHLogProvider.Writer createWalWriter(long dayInMillis) {
-    String dayDirectoryName = formatToDateString(dayInMillis);
+    String dayDirectoryName = BackupUtils.formatToDateString(dayInMillis);
 
     FileSystem fs = backupFileSystemManager.getBackupFs();
     Path walsDir = backupFileSystemManager.getWalsDir();
@@ -383,7 +380,7 @@ public class ContinuousBackupReplicationEndpoint extends BaseReplicationEndpoint
       LOG.trace("{} Bulk load files to upload: {}", Utils.logPeerId(peerId),
         bulkLoadFiles.stream().map(Path::toString).collect(Collectors.joining(", ")));
     }
-    String dayDirectoryName = formatToDateString(dayInMillis);
+    String dayDirectoryName = BackupUtils.formatToDateString(dayInMillis);
     Path bulkloadDir = new Path(backupFileSystemManager.getBulkLoadFilesDir(), dayDirectoryName);
     backupFileSystemManager.getBackupFs().mkdirs(bulkloadDir);
 
@@ -401,9 +398,10 @@ public class ContinuousBackupReplicationEndpoint extends BaseReplicationEndpoint
         LOG.info("{} Bulk load file {} successfully backed up to {}", Utils.logPeerId(peerId), file,
           destPath);
       } catch (IOException e) {
-        LOG.error("{} Failed to back up bulk load file {}: {}", Utils.logPeerId(peerId), file,
-          e.getMessage(), e);
-        throw e;
+        throw new BulkLoadUploadException(
+          String.format("%s Failed to copy bulk load file %s to %s on day %s",
+            Utils.logPeerId(peerId), file, destPath, BackupUtils.formatToDateString(dayInMillis)),
+          e);
       }
     }
 
@@ -411,12 +409,44 @@ public class ContinuousBackupReplicationEndpoint extends BaseReplicationEndpoint
   }
 
   /**
-   * Convert dayInMillis to "yyyy-MM-dd" format
+   * Copy a file with cleanup logic in case of failure. Always overwrite destination to avoid
+   * leaving corrupt partial files.
    */
-  private String formatToDateString(long dayInMillis) {
-    SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);
-    dateFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
-    return dateFormat.format(new Date(dayInMillis));
+  @RestrictedApi(
+      explanation = "Package-private for test visibility only. Do not use outside tests.",
+      link = "",
+      allowedOnPath = "(.*/src/test/.*|.*/org/apache/hadoop/hbase/backup/replication/ContinuousBackupReplicationEndpoint.java)")
+  static void copyWithCleanup(FileSystem srcFS, Path src, FileSystem dstFS, Path dst,
+    Configuration conf) throws IOException {
+    try {
+      if (dstFS.exists(dst)) {
+        FileStatus srcStatus = srcFS.getFileStatus(src);
+        FileStatus dstStatus = dstFS.getFileStatus(dst);
+
+        if (srcStatus.getLen() == dstStatus.getLen()) {
+          LOG.info("Destination file {} already exists with same length ({}). Skipping copy.", dst,
+            dstStatus.getLen());
+          return; // Skip upload
+        } else {
+          LOG.warn(
+            "Destination file {} exists but length differs (src={}, dst={}). " + "Overwriting now.",
+            dst, srcStatus.getLen(), dstStatus.getLen());
+        }
+      }
+
+      // Always overwrite in case previous copy left partial data
+      FileUtil.copy(srcFS, src, dstFS, dst, false, true, conf);
+    } catch (IOException e) {
+      try {
+        if (dstFS.exists(dst)) {
+          dstFS.delete(dst, true);
+          LOG.warn("Deleted partial/corrupt destination file {} after copy failure", dst);
+        }
+      } catch (IOException cleanupEx) {
+        LOG.warn("Failed to cleanup destination file {} after copy failure", dst, cleanupEx);
+      }
+      throw e;
+    }
   }
 
   private Path getBulkLoadFileStagingPath(Path relativePathFromNamespace) throws IOException {
