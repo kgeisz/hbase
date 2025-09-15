@@ -17,8 +17,12 @@
  */
 package org.apache.hadoop.hbase;
 
+import static org.apache.hadoop.hbase.HConstants.HBASE_DIR;
 import static org.apache.hadoop.hbase.IntegrationTestingUtility.createPreSplitLoadTestTable;
 import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.CONF_CONTINUOUS_BACKUP_WAL_DIR;
+import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.CONF_BACKUP_MAX_WAL_SIZE;
+import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.CONF_STAGED_WAL_FLUSH_INITIAL_DELAY;
+import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.CONF_STAGED_WAL_FLUSH_INTERVAL;
 import static org.apache.hadoop.hbase.mapreduce.WALPlayer.IGNORE_EMPTY_FILES;
 import static org.apache.hadoop.hbase.replication.regionserver.ReplicationMarkerChore.REPLICATION_MARKER_ENABLED_KEY;
 import static org.junit.Assert.assertTrue;
@@ -91,7 +95,7 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
   protected static final int DEFAULT_REGIONSERVER_COUNT = 5;
   protected static final int DEFAULT_NUMBER_OF_TABLES = 1;
   protected static final int DEFAULT_NUM_ITERATIONS = 10;
-  protected static final int DEFAULT_ROWS_IN_ITERATION = 10000;
+  protected static final int DEFAULT_ROWS_IN_ITERATION = 10;
   protected static final String SLEEP_TIME_KEY = "sleeptime";
   // short default interval because tests don't run very long.
   protected static final long SLEEP_TIME_DEFAULT = 50000L;
@@ -151,6 +155,14 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
     numTables = conf.getInt(NUMBER_OF_TABLES_KEY, DEFAULT_NUMBER_OF_TABLES);
     sleepTime = conf.getLong(SLEEP_TIME_KEY, SLEEP_TIME_DEFAULT);
     enableBackup(conf);
+
+    String ROOT_DIR = "file:///tmp/test";
+    conf.set(HBASE_DIR, ROOT_DIR);
+    conf.set(FileSystem.FS_DEFAULT_NAME_KEY, FileSystem.DEFAULT_FS);
+    conf.set(CONF_BACKUP_MAX_WAL_SIZE, "10240");
+    conf.set(CONF_STAGED_WAL_FLUSH_INITIAL_DELAY, "10");
+    conf.set(CONF_STAGED_WAL_FLUSH_INTERVAL, "10");
+
     LOG.info("Initializing cluster with {} region servers.", regionServerCount);
     util.initializeCluster(regionServerCount);
     LOG.info("Cluster initialized and ready");
@@ -217,12 +229,15 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
     @Test
     public void testContinuousBackupRestore() throws Exception {
       LOG.info("Starting continuous backup and restore");
-      BACKUP_ROOT_DIR = util.getDataTestDirOnTestFS() + Path.SEPARATOR + BACKUP_ROOT_DIR;
+//      BACKUP_ROOT_DIR = util.getDataTestDirOnTestFS() + Path.SEPARATOR + BACKUP_ROOT_DIR;
+      String rootDir = conf.get(HBASE_DIR);
+      BACKUP_ROOT_DIR = rootDir;
 
-      Path root = util.getDataTestDirOnTestFS();
+//      Path root = util.getDataTestDirOnTestFS();
+      Path root = new Path(rootDir);
       backupWalDir = new Path(root, backupWalDirName);
-      FileSystem fs = FileSystem.get(conf);
-      fs.mkdirs(backupWalDir);
+//      FileSystem fs = FileSystem.get(conf);
+//      fs.mkdirs(backupWalDir);
       LOG.info("kevin: backupWalDir = {}", backupWalDir);
       LOG.info("kevin: BACKUP_ROOT_DIR = {}", BACKUP_ROOT_DIR);
 
@@ -294,6 +309,7 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
     util.loadRandomRows(t1, new byte[] { 'f' }, 100, numRows);
     // flush table
     conn.getAdmin().flush(TableName.valueOf(table.getName()));
+    sleepThread(30*1000);
   }
 
   private String backup(BackupRequest request, BackupAdmin client) throws IOException {
@@ -382,6 +398,7 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
     }
   }
 
+<<<<<<< Updated upstream
   private void scanTable(Table currentTable) {
     LOG.info("kevin: starting scan of table {}", currentTable.getName());
     try {
@@ -394,6 +411,16 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
       throw new RuntimeException("Error when trying to scan table", e);
     }
     LOG.info("kevin: ending scan of table {}", currentTable.getName());
+=======
+  private void sleepThread(int sleepTimeMs) {
+    try {
+      LOG.info("kevin: start sleep for {}", sleepTimeMs);
+      Thread.sleep(sleepTimeMs);
+      LOG.info("kevin: end sleep for {}", sleepTimeMs);
+    } catch (InterruptedException e)  {
+      throw new RuntimeException("Error when trying to sleep for " + sleepTimeMs + " ms: " + e);
+    }
+>>>>>>> Stashed changes
   }
 
   private void restoreVerifyTable(Connection conn, BackupAdmin client, TableName table,
