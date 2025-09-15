@@ -119,10 +119,12 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
 
   protected class BackupAndRestoreThread implements Runnable {
     private final TableName table;
+    private final boolean isContinuousBackupEnabled;
     private Throwable throwable;
 
     public BackupAndRestoreThread(TableName table, boolean isContinuousBackupEnabled) {
       this.table = table;
+      this.isContinuousBackupEnabled = isContinuousBackupEnabled;
       this.throwable = null;
     }
 
@@ -133,7 +135,9 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
     @Override
     public void run() {
       try {
-        runTestSingle(this.table);
+        LOG.info("kevin: start of runTestSingle() in thread {}", Thread.currentThread().getName());
+        runTestSingle(this.table, isContinuousBackupEnabled);
+        LOG.info("kevin: end of runTestSingle() in thread {}", Thread.currentThread().getName());
       } catch (Throwable t) {
         LOG.error(
           "An error occurred in thread {} when performing a backup and restore with table {}: ",
