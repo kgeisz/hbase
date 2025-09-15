@@ -49,6 +49,9 @@ import org.apache.hadoop.hbase.client.Admin;
 import org.apache.hadoop.hbase.client.ColumnFamilyDescriptor;
 import org.apache.hadoop.hbase.client.ColumnFamilyDescriptorBuilder;
 import org.apache.hadoop.hbase.client.Connection;
+import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.client.TableDescriptor;
 import org.apache.hadoop.hbase.client.TableDescriptorBuilder;
@@ -377,6 +380,20 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
       hTable.close();
       LOG.info("{} loop {} finished.", Thread.currentThread().getName(), (count - 1));
     }
+  }
+
+  private void scanTable(Table currentTable) {
+    LOG.info("kevin: starting scan of table {}", currentTable.getName());
+    try {
+      Scan scan = new Scan();
+      ResultScanner resultScanner = currentTable.getScanner(scan);
+      for (Result result : resultScanner) {
+        LOG.info("kevin: scanner result = {}", result);
+      }
+    } catch (IOException e) {
+      throw new RuntimeException("Error when trying to scan table", e);
+    }
+    LOG.info("kevin: ending scan of table {}", currentTable.getName());
   }
 
   private void restoreVerifyTable(Connection conn, BackupAdmin client, TableName table,
