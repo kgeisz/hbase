@@ -136,7 +136,11 @@ public final class MasterRegionFactory {
   public static MasterRegion create(Server server) throws IOException {
     Configuration conf = server.getConfiguration();
     MasterRegionParams params = new MasterRegionParams().server(server)
+<<<<<<< HEAD
       .regionDirName(getMasterRegionDirName()).tableDescriptor(withTrackerConfigs(conf));
+=======
+      .regionDirName(getMasterRegionDirName(conf)).tableDescriptor(withTrackerConfigs(conf));
+>>>>>>> 37320453f33 (HBASE-29594: Add suffix to Master Region data directory)
     long flushSize = conf.getLong(FLUSH_SIZE_KEY, DEFAULT_FLUSH_SIZE);
     long flushPerChanges = conf.getLong(FLUSH_PER_CHANGES_KEY, DEFAULT_FLUSH_PER_CHANGES);
     long flushIntervalMs = conf.getLong(FLUSH_INTERVAL_MS_KEY, DEFAULT_FLUSH_INTERVAL_MS);
@@ -155,7 +159,23 @@ public final class MasterRegionFactory {
     return MasterRegion.create(params);
   }
 
+<<<<<<< HEAD
   public static String getMasterRegionDirName() {
     return MASTER_REGION_DIR_NAME;
+=======
+  /**
+   * Get the Master Region directory name with suffix if configured.
+   * @param conf Configuration to read the suffix from
+   * @return Directory name with suffix if configured, otherwise the default name
+   */
+  public static String getMasterRegionDirName(Configuration conf) {
+    String suffix = conf.get(HConstants.HBASE_META_TABLE_SUFFIX,
+      HConstants.HBASE_META_TABLE_SUFFIX_DEFAULT_VALUE);
+    if (Strings.isNullOrEmpty(suffix)) {
+      return MASTER_STORE_DIR;
+    } else {
+      return MASTER_STORE_DIR + "_" + suffix;
+    }
+>>>>>>> 37320453f33 (HBASE-29594: Add suffix to Master Region data directory)
   }
 }
