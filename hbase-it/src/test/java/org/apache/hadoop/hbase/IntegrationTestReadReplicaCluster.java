@@ -65,12 +65,12 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
 
   @Test
   public void testReadReplicaCluster() {
-//    Configuration c1 = cluster1.getConfiguration();
-//    assertFalse("The active cluster should have" + HBASE_GLOBAL_READONLY_ENABLED_KEY
-//      + "set to false", Boolean.parseBoolean(c1.get(HBASE_GLOBAL_READONLY_ENABLED_KEY)));
-//    Configuration c2 = cluster2.getConfiguration();
-//    assertTrue("The replica cluster should have" + HBASE_GLOBAL_READONLY_ENABLED_KEY
-//      + "set to true", Boolean.parseBoolean(c2.get(HBASE_GLOBAL_READONLY_ENABLED_KEY)));
+    Configuration c1 = cluster1.getConfiguration();
+    assertFalse("The active cluster should have " + HBASE_GLOBAL_READONLY_ENABLED_KEY
+      + " set to false", Boolean.parseBoolean(c1.get(HBASE_GLOBAL_READONLY_ENABLED_KEY)));
+    Configuration c2 = cluster2.getConfiguration();
+    assertFalse("The replica cluster should have " + HBASE_GLOBAL_READONLY_ENABLED_KEY
+      + " set to true", Boolean.parseBoolean(c2.get(HBASE_GLOBAL_READONLY_ENABLED_KEY)));
   }
 
   @Override
