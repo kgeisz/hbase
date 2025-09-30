@@ -141,7 +141,7 @@ public class TestRefreshMetaProcedureIntegration {
 
     Long procId = admin.refreshMeta();
 
-    waitForProcedureCompletion(procId);
+    TEST_UTIL.waitForProcedureCompletion(procId, procExecutor, 1000);
 
     List<RegionInfo> regionsAfterRefresh = admin.getRegions(tableName);
     assertEquals("Missing regions should be restored by refresh_meta", activeRegions.size(),
@@ -180,7 +180,7 @@ public class TestRefreshMetaProcedureIntegration {
 
     setReadOnlyMode(true);
     Long procId = admin.refreshMeta();
-    waitForProcedureCompletion(procId);
+    TEST_UTIL.waitForProcedureCompletion(procId, procExecutor, 1000);
 
     List<TableName> tablesAfterRefresh = Arrays.asList(admin.listTableNames());
 
@@ -202,7 +202,7 @@ public class TestRefreshMetaProcedureIntegration {
 
     setReadOnlyMode(true);
     Long procId = admin.refreshMeta();
-    waitForProcedureCompletion(procId);
+    TEST_UTIL.waitForProcedureCompletion(procId, procExecutor, 1000);
 
     TableState tableState = MetaTableAccessor.getTableState(admin.getConnection(), tableName);
     assert tableState != null;
@@ -258,18 +258,6 @@ public class TestRefreshMetaProcedureIntegration {
       }
     }
     admin.flush(tableName);
-  }
-
-  private void waitForProcedureCompletion(Long procId) {
-    assertTrue("Procedure ID should be positive", procId > 0);
-    TEST_UTIL.waitFor(1000, () -> {
-      try {
-        return procExecutor.isFinished(procId);
-      } catch (Exception e) {
-        return false;
-      }
-    });
-    assertProcNotFailed(procExecutor.getResult(procId));
   }
 
   private void setReadOnlyMode(boolean isReadOnly) {

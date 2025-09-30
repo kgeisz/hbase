@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hbase;
 
+import static org.apache.hadoop.hbase.procedure2.ProcedureTestingUtility.assertProcNotFailed;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -107,6 +108,7 @@ import org.apache.hadoop.hbase.master.assignment.AssignmentTestingUtil;
 import org.apache.hadoop.hbase.master.assignment.RegionStateStore;
 import org.apache.hadoop.hbase.master.assignment.RegionStates;
 import org.apache.hadoop.hbase.mob.MobFileCache;
+import org.apache.hadoop.hbase.procedure2.ProcedureExecutor;
 import org.apache.hadoop.hbase.regionserver.BloomType;
 import org.apache.hadoop.hbase.regionserver.ChunkCreator;
 import org.apache.hadoop.hbase.regionserver.HRegion;
@@ -3731,6 +3733,19 @@ public class HBaseTestingUtil extends HBaseZKTestingUtil {
         it2 = rtdFamilies.iterator(); it.hasNext();) {
       assertEquals(0, ColumnFamilyDescriptor.COMPARATOR.compare(it.next(), it2.next()));
     }
+  }
+
+  public <T> void waitForProcedureCompletion(Long procId,  ProcedureExecutor<T> procExecutor,
+    long timeout) {
+    assertTrue("Procedure ID should be positive", procId > 0);
+    this.waitFor(timeout, () -> {
+      try {
+        return procExecutor.isFinished(procId);
+      } catch (Exception e) {
+        return false;
+      }
+    });
+    assertProcNotFailed(procExecutor.getResult(procId));
   }
 
   /**
