@@ -175,39 +175,53 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
 
   @Test
   public void testReadReplicaCluster() throws IOException, InterruptedException {
+    // Create a table. The replica cluster won't have this table until refresh_meta is run.
     attemptCreateOnReplicaCluster();
     createTableOnActiveCluster();
       assertArrayEquals("The active cluster should have a table called " + Arrays.toString(TABLE_NAME),
               TABLE_NAME, Arrays.stream(activeConn.getAdmin().listTableNames()).toList().get(0).getName());
-    assertTrue("The read replica cluster should still have no tables",
+    assertTrue("The read replica cluster should not have any tables yet",
             Arrays.stream(replicaConn.getAdmin().listTableNames()).toList().isEmpty());
+    refreshMeta();
+    assertFalse("The replica cluster should now have a table called " + Arrays.toString(TABLE_NAME),
+      Arrays.stream(replicaConn.getAdmin().listTableNames()).toList().isEmpty());
 
+    // Add data to the active cluster
     byte[] row1 = Bytes.toBytes("row1");
     try (Table activeTable = activeConn.getTable(TableName.valueOf(TABLE_NAME))) {
       // Add data to the active cluster
       Put put = new Put(row1);
       put.addColumn(COLUMN_FAMILY, QUALIFIER, Bytes.toBytes("1"));
       activeTable.put(put);
-
-      // Verify data was added to the active cluster
-      Get get = new Get(row1);
-      get.addColumn(COLUMN_FAMILY, QUALIFIER);
-      Result result = activeTable.get(get);
-      assertFalse("The Get result should not be empty since data was inserted for row " + Arrays.toString(row1),
-              result.isEmpty());
-      activeAdmin.flush(activeTable.getName());
-      LOG.info("kevin: active cluster get result = {}", result);
     }
 
-    LOG.info("kevin: running replicaAdmin.refreshMeta()");
-    long prodId = replicaAdmin.refreshMeta();
-    replicaUtil.waitForProcedureCompletion(prodId, replicaProcExecutor, 1000);
-    LOG.info("kevin: running replicaAdmin.refreshHFiles()");
-    prodId = replicaAdmin.refreshHFiles();
-    replicaUtil.waitForProcedureCompletion(prodId, replicaProcExecutor, 1000);
+    Result result = getRowFromActiveCluster(row1);
+    assertFalse("The Get result should not be empty since data was inserted for row " + Arrays.toString(row1),
+      result.isEmpty());
+    activeAdmin.flush(TableName.valueOf(TABLE_NAME));
 
-    assertFalse("The replica cluster should now have a table",
-            Arrays.stream(replicaConn.getAdmin().listTableNames()).toList().isEmpty());
+    result = getRowFromReplicaCluster(row1);
+    assertTrue("The Get result should be empty since the replica cluster has not been refreshed",
+      result.isEmpty());
+
+    refreshMeta();
+    refreshHFiles();
+
+    result = getRowFromReplicaCluster(row1);
+    assertFalse("The Get result should be not empty since the replica cluster has been refreshed",
+      result.isEmpty());
+
+
+
+    // TODO run create table and then refresh meta
+    // What happens if i run refresh_meta and not refresh_hfiles
+    // does the table apperar?
+    // play around with doing on or the other
+
+
+
+
+
 
 
 //    try (Table replicaTable = replicaConn.getTable(TableName.valueOf(TABLE_NAME))) {
@@ -247,6 +261,37 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
       activeUtil.waitTableAvailable(TableName.valueOf(TABLE_NAME));
     }
     LOG.info("kevin: end createTableOnActiveCluster()");
+  }
+
+  void refreshMeta() throws IOException {
+    LOG.info("kevin: start replicaAdmin.refreshMeta()");
+    long prodId = replicaAdmin.refreshMeta();
+    replicaUtil.waitForProcedureCompletion(prodId, replicaProcExecutor, 1000);
+    LOG.info("kevin: end replicaAdmin.refreshMeta()");
+  }
+
+  void refreshHFiles() throws IOException {
+    LOG.info("kevin: start replicaAdmin.refreshHFiles()");
+    long prodId = replicaAdmin.refreshHFiles();
+    replicaUtil.waitForProcedureCompletion(prodId, replicaProcExecutor, 1000);
+    LOG.info("kevin: end replicaAdmin.refreshHFiles()");
+  }
+
+  Result getRow(Connection conn, byte[] row) throws IOException {
+    try (Table table = conn.getTable(TableName.valueOf(TABLE_NAME))) {
+      // Verify no data was added to the replica cluster
+      Get get = new Get(row);
+      get.addColumn(COLUMN_FAMILY, QUALIFIER);
+      return table.get(get);
+    }
+  }
+
+  Result getRowFromActiveCluster(byte[] row) throws IOException {
+    return getRow(activeConn, row);
+  }
+
+  Result getRowFromReplicaCluster(byte[] row) throws IOException {
+    return getRow(replicaConn, row);
   }
 
   @Override
