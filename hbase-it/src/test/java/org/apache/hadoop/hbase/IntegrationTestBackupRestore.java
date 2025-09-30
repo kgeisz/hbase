@@ -24,6 +24,7 @@ import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplica
 import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.CONF_STAGED_WAL_FLUSH_INITIAL_DELAY;
 import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.CONF_STAGED_WAL_FLUSH_INTERVAL;
 import static org.apache.hadoop.hbase.mapreduce.WALPlayer.IGNORE_EMPTY_FILES;
+import static org.apache.hadoop.hbase.mapreduce.WALPlayer.IGNORE_MISSING_FILES;
 import static org.apache.hadoop.hbase.replication.regionserver.ReplicationMarkerChore.REPLICATION_MARKER_ENABLED_KEY;
 import static org.junit.Assert.assertTrue;
 
@@ -62,6 +63,7 @@ import org.apache.hadoop.hbase.client.TableDescriptorBuilder;
 import org.apache.hadoop.hbase.testclassification.IntegrationTests;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
 import org.apache.hadoop.util.ToolRunner;
+import org.apache.hbase.thirdparty.com.google.common.collect.Iterables;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -95,7 +97,7 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
   protected static final int DEFAULT_REGIONSERVER_COUNT = 5;
   protected static final int DEFAULT_NUMBER_OF_TABLES = 1;
   protected static final int DEFAULT_NUM_ITERATIONS = 10;
-  protected static final int DEFAULT_ROWS_IN_ITERATION = 10;
+  protected static final int DEFAULT_ROWS_IN_ITERATION = 1000;
   protected static final String SLEEP_TIME_KEY = "sleeptime";
   // short default interval because tests don't run very long.
   protected static final long SLEEP_TIME_DEFAULT = 50000L;
@@ -160,7 +162,7 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
     sleepTime = conf.getLong(SLEEP_TIME_KEY, SLEEP_TIME_DEFAULT);
     enableBackup(conf);
 
-    conf.set(CONF_BACKUP_MAX_WAL_SIZE, "10240");
+    conf.set(CONF_BACKUP_MAX_WAL_SIZE, "1024");
     conf.set(CONF_STAGED_WAL_FLUSH_INITIAL_DELAY, "10");
     conf.set(CONF_STAGED_WAL_FLUSH_INTERVAL, "10");
 
@@ -242,6 +244,7 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
       conf.set(CONF_CONTINUOUS_BACKUP_WAL_DIR, backupWalDir.toString());
       conf.setBoolean(REPLICATION_MARKER_ENABLED_KEY, true);
       conf.setBoolean(IGNORE_EMPTY_FILES, true);
+      conf.setBoolean(IGNORE_MISSING_FILES, true);
       createTables();
       runTestMulti(true);
       LOG.info("End of continuous backup and restore");
@@ -301,13 +304,15 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
   }
 
   private void loadData(TableName table, int numRows) throws IOException {
+    LOG.info("kevin: start loading data into table {}", table.getNameAsString());
     Connection conn = util.getConnection();
     // #0- insert some data to a table
     Table t1 = conn.getTable(table);
     util.loadRandomRows(t1, new byte[] { 'f' }, 100, numRows);
     // flush table
     conn.getAdmin().flush(TableName.valueOf(table.getName()));
-//    sleepThread(30*1000);
+    sleepThread(30*1000);
+    LOG.info("kevin: end loading data into table {}", table.getNameAsString());
   }
 
   private String backup(BackupRequest request, BackupAdmin client) throws IOException {
@@ -331,6 +336,8 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
       Table currentTable = conn.getTable(table);
 
       // #0- insert some data to table 'table'
+      LOG.info("kevin: scan before loading data into the table. the table should be empty");
+      scanTable(currentTable);
       loadData(table, rowsInIteration);
 
       // #1 - create full backup for table first
@@ -342,18 +349,22 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
         .withTargetRootDir(BACKUP_ROOT_DIR).build();
 
       LOG.info("kevin: start full backup for table {}", table);
-      String backupIdFull = backup(request, client);
-      assertTrue(checkSucceeded(backupIdFull));
-      LOG.info("kevin: end full backup for table {}. id = {}", table, backupIdFull);
+      String fullBackupId = backup(request, client);
+      assertTrue(checkSucceeded(fullBackupId));
+      LOG.info("kevin: end full backup for table {}. id = {}", table, fullBackupId);
 
-      backupIds.add(backupIdFull);
+      backupIds.add(fullBackupId);
 
       // TODO - verify the backup snapshot exists
       // Now continue with incremental backups
       int count = 1;
       while (count++ < numIterations) {
+        LOG.info("kevin: start iteration number {}", count-1);
 
         // Load data
+        LOG.info("kevin: scan after full backup, "
+          + "but before loading more data and performing incremental backup");
+        scanTable(currentTable);
         loadData(table, rowsInIteration);
         // Do incremental backup
         builder = new BackupRequest.Builder();
@@ -361,15 +372,16 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
           .withContinuousBackupEnabled(isContinuousBackupEnabled)
           .withTargetRootDir(BACKUP_ROOT_DIR).build();
         LOG.info("kevin: start incremental backup for table {}", table);
-        String backupIdIncr = backup(request, client);
-        assertTrue(checkSucceeded(backupIdIncr));
-        LOG.info("kevin: end incremental backup for table {}. id = {}", table, backupIdFull);
-        backupIds.add(backupIdIncr);
+        String incrBackupId = backup(request, client);
+        assertTrue(checkSucceeded(incrBackupId));
+        LOG.info("kevin: end incremental backup for table {}. id = {}", table, fullBackupId);
+        backupIds.add(incrBackupId);
 
         // Restore incremental backup for table, with overwrite for previous backup
         String previousBackupId = backupIds.get(backupIds.size() - 2);
 
-        LOG.info("kevin: scan before first restoreVerifyTable()");
+        LOG.info("kevin: scan after loading more data and after performing incremental backup, "
+          + "but before first restoreVerifyTable()");
         scanTable(currentTable);
 
         LOG.info("kevin: start restore with overwrite for previous backup for table {}", table);
@@ -381,11 +393,12 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
         scanTable(currentTable);
 
         LOG.info("kevin: start restore with overwrite for last backup for table {}", table);
-        restoreVerifyTable(conn, client, table, backupIdIncr, rowsInIteration * count);
+        restoreVerifyTable(conn, client, table, incrBackupId, rowsInIteration * count);
         LOG.info("kevin: end restore with overwrite for last backup for table {}", table);
 
         LOG.info("kevin: scan after second restoreVerifyTable()");
         scanTable(currentTable);
+        LOG.info("kevin: end iteration number {}", count-1);
       }
       // Now merge all incremental and restore
       String[] incBackupIds = allIncremental(backupIds);
@@ -413,9 +426,12 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
     try {
       Scan scan = new Scan();
       ResultScanner resultScanner = currentTable.getScanner(scan);
+      int scannerSize = 0;
       for (Result result : resultScanner) {
-        LOG.info("kevin: scanner result = {}", result);
+//        LOG.info("scanner result = {}", result);
+        scannerSize++;
       }
+      LOG.info("kevin: size of resultScanner is: {}", scannerSize);
     } catch (IOException e) {
       throw new RuntimeException("Error when trying to scan table", e);
     }
@@ -424,7 +440,7 @@ public class IntegrationTestBackupRestore extends IntegrationTestBase {
 
   private void sleepThread(int sleepTimeMs) {
     try {
-      LOG.info("kevin: start sleep for {}", sleepTimeMs);
+      LOG.info("kevin: start sleep for {} ms", sleepTimeMs);
       Thread.sleep(sleepTimeMs);
       LOG.info("kevin: end sleep for {}", sleepTimeMs);
     } catch (InterruptedException e)  {
