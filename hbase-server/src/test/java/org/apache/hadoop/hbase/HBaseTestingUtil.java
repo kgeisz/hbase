@@ -481,6 +481,15 @@ public class HBaseTestingUtil extends HBaseZKTestingUtil {
   }
 
   /**
+   * Setter method for manually choosing where we put the data for this instance of
+   * HBaseTestingUtility. This method is useful for having two separate miniclusters use the same
+   * root directory.
+   */
+  public void setDataTestDirOnTestFS(Path path) {
+    dataTestDirOnTestFS = path;
+  }
+
+  /**
    * Returns a Path in the test filesystem, obtained from {@link #getTestFileSystem()} to write
    * temporary test data. Call this method after setting up the mini dfs cluster if the test relies
    * on it.

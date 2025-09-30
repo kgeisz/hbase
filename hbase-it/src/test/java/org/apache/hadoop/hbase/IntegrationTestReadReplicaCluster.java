@@ -1,50 +1,122 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.hadoop.hbase;
 
+import static org.apache.hadoop.hbase.HConstants.HBASE_DIR;
+import static org.apache.hadoop.hbase.HConstants.HBASE_GLOBAL_READONLY_ENABLED_KEY;
+import static org.apache.hadoop.hbase.HConstants.HBASE_META_TABLE_SUFFIX;
+import static org.junit.Assert.*;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Set;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.coprocessor.CoprocessorHost;
+import org.apache.hadoop.hbase.master.procedure.MasterProcedureEnv;
+import org.apache.hadoop.hbase.master.region.MasterRegionFactory;
+import org.apache.hadoop.hbase.procedure2.ProcedureExecutor;
+import org.apache.hadoop.hbase.security.access.ReadOnlyController;
 import org.apache.hadoop.hbase.testclassification.IntegrationTests;
-import org.junit.Before;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.util.Set;
-import static org.apache.hadoop.hbase.HConstants.HBASE_GLOBAL_READONLY_ENABLED_KEY;
-import static org.apache.hadoop.hbase.HConstants.HBASE_META_TABLE_SUFFIX;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 /**
  * Test for validating the behavior of the Read-Replica feature. The test starts two separate
- * mini-clusters. The active cluster has
- * {@value org.apache.hadoop.hbase.HConstants#HBASE_GLOBAL_READONLY_ENABLED_KEY} set to false,
- * while the replica cluster has this config variable set to true.
+ * mini-clusters that share the same DFS and root directory. The active cluster has
+ * {@value org.apache.hadoop.hbase.HConstants#HBASE_GLOBAL_READONLY_ENABLED_KEY} set to false, while
+ * the replica cluster has this config variable set to true.
  */
 @Category(IntegrationTests.class)
 public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
-  protected static final Logger LOG = LoggerFactory.getLogger(IntegrationTestReadReplicaCluster.class);
-  protected Configuration conf1;
-  protected Configuration conf2;
-  protected IntegrationTestingUtility util2;
-  SingleProcessHBaseCluster cluster1;
-  SingleProcessHBaseCluster cluster2;
+  protected static final Logger LOG =
+    LoggerFactory.getLogger(IntegrationTestReadReplicaCluster.class);
+  protected static final String READ_ONLY_CONTROLLER_NAME = ReadOnlyController.class.getName();
+  protected static final String META_TABLE_SUFFIX = "2";
+  protected static final byte[] TABLE_NAME = Bytes.toBytes("testTable");
+  protected static final byte[] COLUMN_FAMILY = Bytes.toBytes("cf1");
+  protected static final byte[] QUALIFIER = Bytes.toBytes("q1");
+  protected Configuration activeConf;
+  protected Configuration replicaConf;
+  protected IntegrationTestingUtility activeUtil;
+  protected IntegrationTestingUtility replicaUtil;
+  SingleProcessHBaseCluster activeCluster;
+  SingleProcessHBaseCluster replicaCluster;
+  Connection activeConn;
+  Connection replicaConn;
+  Admin activeAdmin;
+  Admin replicaAdmin;
+  protected ProcedureExecutor<MasterProcedureEnv> replicaProcExecutor;
+  Path rootDir;
+  String activeClusterId;
+  FileSystem fs;
 
   @Override
   public void setUpCluster() throws Exception {
     LOG.info("kevin: start setUpCluster");
-    // Starting as the active cluster
-    util = new IntegrationTestingUtility();
-    conf1 = util.getConfiguration();
-    conf1.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, false);
-    cluster1 = util.startMiniCluster();
-    LOG.info("kevin: cluster1 ID from master = {}", cluster1.getMaster().getClusterId());
 
-    // Starting as the replica cluster
-    conf2 = HBaseConfiguration.create(conf1);
-    conf2.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, false);
-    conf2.set(HBASE_META_TABLE_SUFFIX, "2");
-    util2 = new IntegrationTestingUtility(conf2);
-    cluster2 = util2.startMiniCluster();
-    LOG.info("kevin: cluster2 ID from master = {}", cluster2.getMaster().getClusterId());
+    // Set up and start the active cluster
+    util = new IntegrationTestingUtility();  // The test fails if util is not set
+    activeUtil = util;
+    activeConf = activeUtil.getConfiguration();
+    activeConf.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, false);
+    activeConf.set(CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, READ_ONLY_CONTROLLER_NAME);
+    activeConf.set(CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY, READ_ONLY_CONTROLLER_NAME);
+    activeConf.set(CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, READ_ONLY_CONTROLLER_NAME);
+    // Minimize resource contention within the DFS
+    activeConf.setInt("dfs.datanode.handler.count", 1);
+    activeConf.setInt("dfs.namenode.handler.count", 1);
+    LOG.info("kevin: starting cluster1 minicluster");
+    activeCluster = activeUtil.startMiniCluster();
+    String rootDir1 = activeCluster.getConfiguration().get(HBASE_DIR);
+    LOG.info("kevin: finished starting cluster1 minicluster");
+    activeClusterId = activeCluster.getMaster().getClusterId();
+    LOG.info("kevin: active cluster's ID = {}", activeClusterId);
+    activeConn = activeUtil.getConnection();
+    activeAdmin = activeConn.getAdmin();
+
+    // Use the active cluster's existing configuration to set up and start the replica cluster
+    replicaConf = HBaseConfiguration.create(activeConf);
+    replicaConf.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, true);
+    replicaConf.set(HBASE_META_TABLE_SUFFIX, META_TABLE_SUFFIX);
+    replicaUtil = new IntegrationTestingUtility(replicaConf);
+    replicaUtil.setDataTestDirOnTestFS(activeUtil.getDataTestDirOnTestFS());
+    replicaUtil.setDFSCluster(activeUtil.getDFSCluster());
+    LOG.info("kevin: starting cluster2 minicluster");
+    replicaCluster = replicaUtil.startMiniCluster();
+    String rootDir2 = replicaCluster.getConfiguration().get(HBASE_DIR);
+    LOG.info("kevin: finished starting cluster2 minicluster");
+    LOG.info("kevin: replica cluster's ID = {}", replicaCluster.getMaster().getClusterId());
+    replicaConn = replicaUtil.getConnection();
+    replicaAdmin = replicaConn.getAdmin();
+    replicaProcExecutor = replicaUtil.getHBaseCluster().getMaster().getMasterProcedureExecutor();
+
+    fs = activeCluster.getMaster().getFileSystem();
+    assertProperInitialization(rootDir1, rootDir2);
+
+    LOG.info("kevin: dfs.datanode.handler.count = {}", activeConf.get("dfs.datanode.handler.count"));
+    LOG.info("kevin: dfs.namenode.handler.count = {}", activeConf.get("dfs.namenode.handler.count"));
+
     LOG.info("kevin: end setUpCluster");
   }
 
@@ -52,25 +124,129 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
   public void cleanUpCluster() throws Exception {
     LOG.info("kevin: start cleanUpCluster");
 
-    LOG.info("kevin: start restoring cluster1");
-    util.restoreCluster();
-    LOG.info("kevin: end restoring cluster1");
+    activeAdmin.close();
+    replicaAdmin.close();
+    activeConn.close();
+    replicaConn.close();
 
-    LOG.info("kevin: start restoring cluster2");
-    util2.restoreCluster();
-    LOG.info("kevin: end restoring cluster2");
+    LOG.info("kevin: starting shutdownMiniHBaseCluster for cluster2");
+    replicaUtil.shutdownMiniHBaseCluster();
+    LOG.info("kevin: end of shutdownMiniHBaseCluster for cluster2");
+
+    LOG.info("kevin: starting shutdownMiniZKCluster for cluster2");
+    replicaUtil.shutdownMiniZKCluster();
+    LOG.info("kevin: end of shutdownMiniZKCluster for cluster2");
+
+    LOG.info("kevin: start restoring cluster1");
+    activeUtil.restoreCluster();
+    LOG.info("kevin: end restoring cluster1");
 
     LOG.info("kevin: end cleanUpCluster");
   }
 
+  private void assertProperInitialization(String rootDir1, String rootDir2) throws IOException {
+    assertEquals("The root directories of each cluster should be the same", rootDir1, rootDir2);
+    rootDir = new Path(rootDir1);
+    LOG.info("{} for both clusters is: {}", HBASE_DIR, rootDir);
+
+    assertEquals("The data test directory should be the same for each cluster",
+      activeUtil.getDataTestDirOnTestFS(), replicaUtil.getDataTestDirOnTestFS());
+    LOG.info("dataTestDirOnTestFS for both clusters is: {}",
+      activeUtil.getDataTestDirOnTestFS().toString());
+
+    assertEquals("The two HBase clusters should be using the same DFS cluster",
+      activeUtil.getDataTestDirOnTestFS(), replicaUtil.getDataTestDirOnTestFS());
+
+    assertFalse(
+      "The active cluster should have " + HBASE_GLOBAL_READONLY_ENABLED_KEY + " set to false",
+      Boolean.parseBoolean(activeConf.get(HBASE_GLOBAL_READONLY_ENABLED_KEY)));
+    assertTrue(
+      "The replica cluster should have " + HBASE_GLOBAL_READONLY_ENABLED_KEY + " set to true",
+      Boolean.parseBoolean(replicaConf.get(HBASE_GLOBAL_READONLY_ENABLED_KEY)));
+
+    // Each cluster should have its own MasterData directory
+    assertTrue("Expected " + MasterRegionFactory.MASTER_STORE_DIR + " to exist in the filesystem",
+      fs.exists(new Path(rootDir, MasterRegionFactory.MASTER_STORE_DIR)));
+    assertTrue(
+      "Expected " + MasterRegionFactory.MASTER_STORE_DIR + "_" + META_TABLE_SUFFIX
+        + " to exist in the filesystem",
+      fs.exists(new Path(rootDir, MasterRegionFactory.MASTER_STORE_DIR + "_" + META_TABLE_SUFFIX)));
+  }
+
   @Test
-  public void testReadReplicaCluster() {
-    Configuration c1 = cluster1.getConfiguration();
-    assertFalse("The active cluster should have " + HBASE_GLOBAL_READONLY_ENABLED_KEY
-      + " set to false", Boolean.parseBoolean(c1.get(HBASE_GLOBAL_READONLY_ENABLED_KEY)));
-    Configuration c2 = cluster2.getConfiguration();
-    assertFalse("The replica cluster should have " + HBASE_GLOBAL_READONLY_ENABLED_KEY
-      + " set to true", Boolean.parseBoolean(c2.get(HBASE_GLOBAL_READONLY_ENABLED_KEY)));
+  public void testReadReplicaCluster() throws IOException, InterruptedException {
+    attemptCreateOnReplicaCluster();
+    createTableOnActiveCluster();
+      assertArrayEquals("The active cluster should have a table called " + Arrays.toString(TABLE_NAME),
+              TABLE_NAME, Arrays.stream(activeConn.getAdmin().listTableNames()).toList().get(0).getName());
+    assertTrue("The read replica cluster should still have no tables",
+            Arrays.stream(replicaConn.getAdmin().listTableNames()).toList().isEmpty());
+
+    byte[] row1 = Bytes.toBytes("row1");
+    try (Table activeTable = activeConn.getTable(TableName.valueOf(TABLE_NAME))) {
+      // Add data to the active cluster
+      Put put = new Put(row1);
+      put.addColumn(COLUMN_FAMILY, QUALIFIER, Bytes.toBytes("1"));
+      activeTable.put(put);
+
+      // Verify data was added to the active cluster
+      Get get = new Get(row1);
+      get.addColumn(COLUMN_FAMILY, QUALIFIER);
+      Result result = activeTable.get(get);
+      assertFalse("The Get result should not be empty since data was inserted for row " + Arrays.toString(row1),
+              result.isEmpty());
+      activeAdmin.flush(activeTable.getName());
+      LOG.info("kevin: active cluster get result = {}", result);
+    }
+
+    LOG.info("kevin: running replicaAdmin.refreshMeta()");
+    long prodId = replicaAdmin.refreshMeta();
+    replicaUtil.waitForProcedureCompletion(prodId, replicaProcExecutor, 1000);
+    LOG.info("kevin: running replicaAdmin.refreshHFiles()");
+    prodId = replicaAdmin.refreshHFiles();
+    replicaUtil.waitForProcedureCompletion(prodId, replicaProcExecutor, 1000);
+
+    assertFalse("The replica cluster should now have a table",
+            Arrays.stream(replicaConn.getAdmin().listTableNames()).toList().isEmpty());
+
+
+//    try (Table replicaTable = replicaConn.getTable(TableName.valueOf(TABLE_NAME))) {
+//      Get get = new Get(row1);
+//      get.addColumn(COLUMN_FAMILY, QUALIFIER);
+//      Result result = replicaTable.get(get);
+//      LOG.info("kevin: replica cluster get result = {}", result);
+//      String s = "e";
+//    }
+
+
+
+
+    String s = "e";
+  }
+
+  void attemptCreateOnReplicaCluster() {
+    // This createTable() should throw an exception and take us to the catch block
+    try (Table ignored = replicaUtil.createTable(TableName.valueOf(TABLE_NAME), COLUMN_FAMILY)) {
+      fail("An IOException should have occurred when trying to create a new table on the replica cluster");
+    } catch (IOException e) {
+      String expectedMsg = "Operation not allowed in Read-Only Mode";
+      assertTrue("Expected an IOException with the following message: "
+        + expectedMsg, e.getMessage().contains(expectedMsg));
+    }
+  }
+
+  Table createTable(IntegrationTestingUtility util) throws IOException {
+    try (Table table = util.createTable(TableName.valueOf(TABLE_NAME), COLUMN_FAMILY)) {
+      return table;
+    }
+  }
+
+  void createTableOnActiveCluster() throws IOException, InterruptedException {
+    LOG.info("kevin: start createTableOnActiveCluster()");
+    try (Table ignored = activeUtil.createTable(TableName.valueOf(TABLE_NAME), COLUMN_FAMILY)) {
+      activeUtil.waitTableAvailable(TableName.valueOf(TABLE_NAME));
+    }
+    LOG.info("kevin: end createTableOnActiveCluster()");
   }
 
   @Override
@@ -86,5 +262,15 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
   @Override
   protected Set<String> getColumnFamilies() {
     return Set.of();
+  }
+
+  @Override
+  public void setUpMonkey() {
+    LOG.info("Skipping setup of Chaos Monkey");
+  }
+
+  @Override
+  public void cleanUpMonkey() {
+    LOG.info("Skipping cleanup of Chaos Monkey because it was never set up");
   }
 }
