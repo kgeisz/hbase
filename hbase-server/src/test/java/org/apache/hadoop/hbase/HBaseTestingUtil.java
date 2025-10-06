@@ -3744,7 +3744,7 @@ public class HBaseTestingUtil extends HBaseZKTestingUtil {
     }
   }
 
-  public <T> void waitForProcedureCompletion(Long procId,  ProcedureExecutor<T> procExecutor,
+  public <T> void waitForProcedureCompletion(Long procId, ProcedureExecutor<T> procExecutor,
     long timeout) {
     assertTrue("Procedure ID should be positive", procId > 0);
     this.waitFor(timeout, () -> {
@@ -3755,6 +3755,32 @@ public class HBaseTestingUtil extends HBaseZKTestingUtil {
       }
     });
     assertProcNotFailed(procExecutor.getResult(procId));
+  }
+
+  public void notifyConfigurationObservers(SingleProcessHBaseCluster cluster) {
+    LOG.info("kevin: start notifyConfigurationObservers()");
+    // HMaster master = this.getHBaseCluster().getMaster();
+    // master.getConfigurationManager().notifyAllObservers(this.getConfiguration());
+    List<MasterThread> masterThreads = cluster.getMasterThreads();
+    LOG.info("kevin: masterThreads size = {}", masterThreads.size());
+
+    List<HMaster> masters =
+      cluster.getMasterThreads().stream().map(MasterThread::getMaster).toList();
+    for (HMaster master : masters) {
+      LOG.info("kevin: notifying observers on master with name {}", master.getServerName());
+      master.getConfigurationManager().notifyAllObservers(this.getConfiguration());
+    }
+
+    List<RegionServerThread> regionServerThreads = cluster.getRegionServerThreads();
+    LOG.info("kevin: regionServerThreads size = {}", regionServerThreads.size());
+
+    List<HRegionServer> regionServers = cluster.getRegionServerThreads().stream()
+      .map(JVMClusterUtil.RegionServerThread::getRegionServer).toList();
+    for (HRegionServer rs : regionServers) {
+      LOG.info("kevin: notifying observers on region server with name {}", rs.getServerName());
+      rs.getConfigurationManager().notifyAllObservers(this.getConfiguration());
+    }
+    LOG.info("kevin: end notifyConfigurationObservers()");
   }
 
   /**
