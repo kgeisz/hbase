@@ -58,17 +58,14 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
   // protected static final byte[] TABLE_NAME = Bytes.toBytes("testTable");
   protected static final byte[] COLUMN_FAMILY = Bytes.toBytes("cf1");
   protected static final byte[] QUALIFIER = Bytes.toBytes("q1");
-  protected Configuration activeConf;
-  protected Configuration replicaConf;
-  protected IntegrationTestingUtility activeUtil;
-  protected IntegrationTestingUtility replicaUtil;
-  SingleProcessHBaseCluster activeCluster;
-  SingleProcessHBaseCluster replicaCluster;
-  Connection activeConn;
-  Connection replicaConn;
-  Admin activeAdmin;
-  Admin replicaAdmin;
-  protected ProcedureExecutor<MasterProcedureEnv> replicaProcExecutor;
+  SingleProcessHBaseCluster clusterA;
+  SingleProcessHBaseCluster clusterB;
+  protected IntegrationTestingUtility utilA;
+  protected IntegrationTestingUtility utilB;
+  protected Configuration confA;
+  protected Configuration confB;
+  Connection connectionA;
+  Connection connectionB;
   Path rootDir;
   FileSystem fs;
 
@@ -78,55 +75,52 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
 
     // Set up and start the active cluster
     util = new IntegrationTestingUtility(); // The test fails if util is not set
-    activeUtil = util;
-    activeConf = activeUtil.getConfiguration();
-    activeConf.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, false);
-    activeConf.set(CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, READ_ONLY_CONTROLLER_NAME);
-    activeConf.set(CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY, READ_ONLY_CONTROLLER_NAME);
-    activeConf.set(CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, READ_ONLY_CONTROLLER_NAME);
+    utilA = util;
+    confA = utilA.getConfiguration();
+    confA.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, false);
+    confA.set(CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, READ_ONLY_CONTROLLER_NAME);
+    confA.set(CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY, READ_ONLY_CONTROLLER_NAME);
+    confA.set(CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, READ_ONLY_CONTROLLER_NAME);
     // Minimize resource contention within the DFS
-    activeConf.setInt("dfs.datanode.handler.count", 1);
-    activeConf.setInt("dfs.namenode.handler.count", 1);
+    confA.setInt("dfs.datanode.handler.count", 1);
+    confA.setInt("dfs.namenode.handler.count", 1);
     // Prevent retries for Puts on the replica cluster that are expected to fail
-    activeConf.setInt(HBASE_CLIENT_RETRIES_NUMBER, 0);
+    confA.setInt(HBASE_CLIENT_RETRIES_NUMBER, 0);
     // activeConf.setInt("dfs.socket.timeout", 180*1000);
     // activeConf.setInt("dfs.datanode.socket.write.timeout", 180*1000);
     // activeConf.setInt("dfs.client-write-packet-timeout", 120*1000);
 
     LOG.info("kevin: starting cluster1 minicluster");
-    activeCluster = activeUtil.startMiniCluster();
-    String rootDir1 = activeCluster.getConfiguration().get(HBASE_DIR);
+    clusterA = utilA.startMiniCluster();
+    String rootDir1 = clusterA.getConfiguration().get(HBASE_DIR);
     LOG.info("kevin: finished starting cluster1 minicluster");
-    activeConn = activeUtil.getConnection();
-    activeAdmin = activeConn.getAdmin();
+    connectionA = utilA.getConnection();
 
     // Use the active cluster's existing configuration to set up and start the replica cluster
-    replicaConf = HBaseConfiguration.create(activeConf);
-    replicaConf.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, true);
-    replicaConf.set(HBASE_META_TABLE_SUFFIX, TEST_META_TABLE_SUFFIX);
-    replicaUtil = new IntegrationTestingUtility(replicaConf);
-    replicaUtil.setDataTestDirOnTestFS(activeUtil.getDataTestDirOnTestFS());
-    replicaUtil.setDFSCluster(activeUtil.getDFSCluster());
+    confB = HBaseConfiguration.create(confA);
+    confB.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, true);
+    confB.set(HBASE_META_TABLE_SUFFIX, TEST_META_TABLE_SUFFIX);
+    utilB = new IntegrationTestingUtility(confB);
+    utilB.setDataTestDirOnTestFS(utilA.getDataTestDirOnTestFS());
+    utilB.setDFSCluster(utilA.getDFSCluster());
     LOG.info("kevin: starting cluster2 minicluster");
-    replicaCluster = replicaUtil.startMiniCluster();
-    String rootDir2 = replicaCluster.getConfiguration().get(HBASE_DIR);
+    clusterB = utilB.startMiniCluster();
+    String rootDir2 = clusterB.getConfiguration().get(HBASE_DIR);
     LOG.info("kevin: finished starting cluster2 minicluster");
-    replicaConn = replicaUtil.getConnection();
-    replicaAdmin = replicaConn.getAdmin();
-    replicaProcExecutor = replicaUtil.getHBaseCluster().getMaster().getMasterProcedureExecutor();
+    connectionB = utilB.getConnection();
 
-    LOG.info("kevin: active cluster ID = {}", activeCluster.getMaster().getClusterId());
-    LOG.info("kevin: replica cluster ID = {}", replicaCluster.getMaster().getClusterId());
+    LOG.info("kevin: active cluster ID = {}", clusterA.getMaster().getClusterId());
+    LOG.info("kevin: replica cluster ID = {}", clusterB.getMaster().getClusterId());
     // assertNotEquals(activeCluster.getMaster().getClusterId(),
     // replicaCluster.getMaster().getClusterId());
 
-    fs = activeCluster.getMaster().getFileSystem();
+    fs = clusterA.getMaster().getFileSystem();
     assertProperInitialization(rootDir1, rootDir2);
 
     LOG.info("kevin: dfs.datanode.handler.count = {}",
-      activeConf.get("dfs.datanode.handler.count"));
+      confA.get("dfs.datanode.handler.count"));
     LOG.info("kevin: dfs.namenode.handler.count = {}",
-      activeConf.get("dfs.namenode.handler.count"));
+      confA.get("dfs.namenode.handler.count"));
 
     LOG.info("kevin: end setUpCluster");
   }
@@ -135,21 +129,19 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
   public void cleanUpCluster() throws Exception {
     LOG.info("kevin: start cleanUpCluster");
 
-    activeAdmin.close();
-    replicaAdmin.close();
-    activeConn.close();
-    replicaConn.close();
+    connectionA.close();
+    connectionB.close();
 
     LOG.info("kevin: starting shutdownMiniHBaseCluster for cluster2");
-    replicaUtil.shutdownMiniHBaseCluster();
+    utilB.shutdownMiniHBaseCluster();
     LOG.info("kevin: end of shutdownMiniHBaseCluster for cluster2");
 
     LOG.info("kevin: starting shutdownMiniZKCluster for cluster2");
-    replicaUtil.shutdownMiniZKCluster();
+    utilB.shutdownMiniZKCluster();
     LOG.info("kevin: end of shutdownMiniZKCluster for cluster2");
 
     LOG.info("kevin: start restoring cluster1");
-    activeUtil.restoreCluster();
+    utilA.restoreCluster();
     LOG.info("kevin: end restoring cluster1");
 
     LOG.info("kevin: end cleanUpCluster");
@@ -161,19 +153,19 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
     LOG.info("{} for both clusters is: {}", HBASE_DIR, rootDir);
 
     assertEquals("The data test directory should be the same for each cluster",
-      activeUtil.getDataTestDirOnTestFS(), replicaUtil.getDataTestDirOnTestFS());
+      utilA.getDataTestDirOnTestFS(), utilB.getDataTestDirOnTestFS());
     LOG.info("dataTestDirOnTestFS for both clusters is: {}",
-      activeUtil.getDataTestDirOnTestFS().toString());
+      utilA.getDataTestDirOnTestFS().toString());
 
     assertEquals("The two HBase clusters should be using the same DFS cluster",
-      activeUtil.getDataTestDirOnTestFS(), replicaUtil.getDataTestDirOnTestFS());
+      utilA.getDataTestDirOnTestFS(), utilB.getDataTestDirOnTestFS());
 
     assertFalse(
       "The active cluster should have " + HBASE_GLOBAL_READONLY_ENABLED_KEY + " set to false",
-      Boolean.parseBoolean(activeConf.get(HBASE_GLOBAL_READONLY_ENABLED_KEY)));
+      Boolean.parseBoolean(confA.get(HBASE_GLOBAL_READONLY_ENABLED_KEY)));
     assertTrue(
       "The replica cluster should have " + HBASE_GLOBAL_READONLY_ENABLED_KEY + " set to true",
-      Boolean.parseBoolean(replicaConf.get(HBASE_GLOBAL_READONLY_ENABLED_KEY)));
+      Boolean.parseBoolean(confB.get(HBASE_GLOBAL_READONLY_ENABLED_KEY)));
 
     // Each cluster should have its own MasterData directory
     assertTrue("Expected " + MasterRegionFactory.MASTER_STORE_DIR + " to exist in the filesystem",
@@ -184,7 +176,7 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
       fs.exists(
         new Path(rootDir, MasterRegionFactory.MASTER_STORE_DIR + "_" + TEST_META_TABLE_SUFFIX)));
 
-    validateActiveClusterSuffixFile(activeCluster.getMaster().getClusterId(), "");
+    validateActiveClusterSuffixFile(clusterA.getMaster().getClusterId(), "");
   }
 
   // Checks for the correct active cluster ID and suffix in the active cluster file
@@ -201,19 +193,19 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
     LOG.info("kevin: start of testReadReplicaCluster()");
     // Create a table. The replica cluster won't have this table until refresh_meta is run.
     final byte[] table1 = Bytes.toBytes("testTable1");
-    attemptCreateOnReplicaCluster(replicaUtil, table1);
-    createTableOnActiveCluster(activeUtil, table1);
+    attemptCreateOnReplicaCluster(utilB, table1);
+    createTableOnActiveCluster(utilA, table1);
     assertArrayEquals("The active cluster should have a table called " + Arrays.toString(table1),
-      table1, Arrays.stream(activeConn.getAdmin().listTableNames()).toList().get(0).getName());
+      table1, Arrays.stream(utilA.getAdmin().listTableNames()).toList().get(0).getName());
     assertTrue("The read replica cluster should not have any tables yet",
-      Arrays.stream(replicaConn.getAdmin().listTableNames()).toList().isEmpty());
-    refreshMeta();
+      Arrays.stream(utilB.getAdmin().listTableNames()).toList().isEmpty());
+    refreshMeta(utilB);
     assertFalse("The replica cluster should now have a table called " + Arrays.toString(table1),
-      Arrays.stream(replicaConn.getAdmin().listTableNames()).toList().isEmpty());
+      Arrays.stream(utilB.getAdmin().listTableNames()).toList().isEmpty());
 
     // Add data to the active cluster
     byte[] row1 = Bytes.toBytes("row1");
-    try (Table activeTable = activeConn.getTable(TableName.valueOf(table1))) {
+    try (Table activeTable = connectionA.getTable(TableName.valueOf(table1))) {
       // Add data to the active cluster
       Put put = new Put(row1);
       put.addColumn(COLUMN_FAMILY, QUALIFIER, Bytes.toBytes("1"));
@@ -221,22 +213,23 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
     }
 
     // Verify new data cannot be put on the replica cluster
-    attemptPutOnReplicaCluster(replicaUtil, table1);
+    attemptPutOnReplicaCluster(utilB, table1);
 
-    Result result = getRow(activeConn, table1, row1);
+    Result result = getRow(connectionA, table1, row1);
     assertFalse("The Get result should not be empty on the active cluster since data was inserted "
       + "for row " + Arrays.toString(row1), result.isEmpty());
-    activeAdmin.flush(TableName.valueOf(table1));
+    utilA.getAdmin().flush(TableName.valueOf(table1));
 
-    result = getRow(replicaConn, table1, row1);
+    result = getRow(connectionB, table1, row1);
     assertTrue(
       "The Get result should be empty on the replica cluster since it has not been refreshed",
       result.isEmpty());
 
-    refreshMeta();
-    refreshHFiles();
+    // The replica cluster should have the same data as the active cluster after refresh
+    refreshMeta(utilB);
+    refreshHFiles(utilB);
 
-    result = getRow(replicaConn, table1, row1);
+    result = getRow(connectionB, table1, row1);
     assertFalse(
       "The Get result should not be empty on the replica cluster since it has been refreshed",
       result.isEmpty());
@@ -245,15 +238,15 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
 
     // Dynamically switch the active cluster to read-only mode and verify it no longer supports
     // puts and table creations
-    activeConf.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, true);
-    activeUtil.notifyConfigurationObservers(activeCluster);
-    attemptPutOnReplicaCluster(activeUtil, table1);
+    confA.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, true);
+    utilA.notifyConfigurationObservers(clusterA);
+    attemptPutOnReplicaCluster(utilA, table1);
     final byte[] table2 = Bytes.toBytes("testTable2");
-    attemptCreateOnReplicaCluster(activeUtil, table2);
+    attemptCreateOnReplicaCluster(utilA, table2);
 
-    replicaConf.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, false);
-    replicaUtil.notifyConfigurationObservers(replicaCluster);
-    createTableOnActiveCluster(replicaUtil, table2);
+    confB.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, false);
+    utilB.notifyConfigurationObservers(clusterB);
+    createTableOnActiveCluster(utilB, table2);
 
     // try (Table replicaTable = replicaConn.getTable(TableName.valueOf(TABLE_NAME))) {
     // Get get = new Get(row1);
@@ -314,17 +307,21 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
     LOG.info("kevin: end createTableOnActiveCluster()");
   }
 
-  void refreshMeta() throws IOException {
+  void refreshMeta(IntegrationTestingUtility util) throws IOException {
     LOG.info("kevin: start replicaAdmin.refreshMeta()");
-    long prodId = replicaAdmin.refreshMeta();
-    replicaUtil.waitForProcedureCompletion(prodId, replicaProcExecutor, 1000);
+    ProcedureExecutor<MasterProcedureEnv> procExecutor
+      = util.getHBaseCluster().getMaster().getMasterProcedureExecutor();
+    long prodId = util.getAdmin().refreshMeta();
+    util.waitForProcedureCompletion(prodId, procExecutor, 1000);
     LOG.info("kevin: end replicaAdmin.refreshMeta()");
   }
 
-  void refreshHFiles() throws IOException {
+  void refreshHFiles(IntegrationTestingUtility util) throws IOException {
     LOG.info("kevin: start replicaAdmin.refreshHFiles()");
-    long prodId = replicaAdmin.refreshHFiles();
-    replicaUtil.waitForProcedureCompletion(prodId, replicaProcExecutor, 1000);
+    ProcedureExecutor<MasterProcedureEnv> procExecutor
+      = util.getHBaseCluster().getMaster().getMasterProcedureExecutor();
+    long prodId = util.getAdmin().refreshHFiles();
+    util.waitForProcedureCompletion(prodId, procExecutor, 1000);
     LOG.info("kevin: end replicaAdmin.refreshHFiles()");
   }
 
@@ -335,14 +332,6 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestBase {
       get.addColumn(COLUMN_FAMILY, QUALIFIER);
       return table.get(get);
     }
-  }
-
-  Result getRowFromActiveCluster(byte[] tableName, byte[] row) throws IOException {
-    return getRow(activeConn, tableName, row);
-  }
-
-  Result getRowFromReplicaCluster(byte[] tableName, byte[] row) throws IOException {
-    return getRow(replicaConn, tableName, row);
   }
 
   void attemptPutOnReplicaCluster(IntegrationTestingUtility util, byte[] tableName) {
