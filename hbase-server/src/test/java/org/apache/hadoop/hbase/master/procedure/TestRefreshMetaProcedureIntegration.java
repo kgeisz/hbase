@@ -17,7 +17,6 @@
  */
 package org.apache.hadoop.hbase.master.procedure;
 
-import static org.apache.hadoop.hbase.procedure2.ProcedureTestingUtility.assertProcNotFailed;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
