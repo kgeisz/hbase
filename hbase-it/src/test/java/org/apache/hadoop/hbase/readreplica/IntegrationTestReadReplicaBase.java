@@ -75,10 +75,10 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
     // activeConf.setInt("dfs.datanode.socket.write.timeout", 180*1000);
     // activeConf.setInt("dfs.client-write-packet-timeout", 120*1000);
 
-    LOG.info("kevin: starting cluster1 minicluster");
+    LOG.info("kevin: starting clusterA minicluster");
     clusterA = utilA.startMiniCluster();
     String rootDir1 = clusterA.getConfiguration().get(HBASE_DIR);
-    LOG.info("kevin: finished starting cluster1 minicluster");
+    LOG.info("kevin: finished starting clusterA minicluster");
     connectionA = utilA.getConnection();
 
     // Use the active cluster's existing configuration to set up and start the replica cluster
@@ -88,10 +88,10 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
     utilB = new IntegrationTestingUtility(confB);
     utilB.setDataTestDirOnTestFS(utilA.getDataTestDirOnTestFS());
     utilB.setDFSCluster(utilA.getDFSCluster());
-    LOG.info("kevin: starting cluster2 minicluster");
+    LOG.info("kevin: starting clusterB minicluster");
     clusterB = utilB.startMiniCluster();
     String rootDir2 = clusterB.getConfiguration().get(HBASE_DIR);
-    LOG.info("kevin: finished starting cluster2 minicluster");
+    LOG.info("kevin: finished starting clusterB minicluster");
     connectionB = utilB.getConnection();
 
     LOG.info("kevin: active cluster ID = {}", clusterA.getMaster().getClusterId());
@@ -117,17 +117,17 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
     connectionA.close();
     connectionB.close();
 
-    LOG.info("kevin: starting shutdownMiniHBaseCluster for cluster2");
+    LOG.info("kevin: starting shutdownMiniHBaseCluster for clusterB");
     utilB.shutdownMiniHBaseCluster();
-    LOG.info("kevin: end of shutdownMiniHBaseCluster for cluster2");
+    LOG.info("kevin: end of shutdownMiniHBaseCluster for clusterB");
 
-    LOG.info("kevin: starting shutdownMiniZKCluster for cluster2");
+    LOG.info("kevin: starting shutdownMiniZKCluster for clusterB");
     utilB.shutdownMiniZKCluster();
-    LOG.info("kevin: end of shutdownMiniZKCluster for cluster2");
+    LOG.info("kevin: end of shutdownMiniZKCluster for clusterB");
 
-    LOG.info("kevin: start restoring cluster1");
+    LOG.info("kevin: start restoring clusterA");
     utilA.restoreCluster();
-    LOG.info("kevin: end restoring cluster1");
+    LOG.info("kevin: end restoring clusterA");
 
     LOG.info("kevin: end cleanUpCluster");
   }
@@ -178,7 +178,7 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
       isReplicaClusterUtil(util));
   }
 
-  void attemptCreateOnReplicaCluster(IntegrationTestingUtility util, byte[] tableName) {
+  void attemptCreateOnReplicaCluster(IntegrationTestingUtility util, String tableName) {
     assertIsReplicaClusterUtil(util);
     // This createTable() call should throw an exception and take us to the catch block
     // fail() is supposed to not get executed
@@ -194,13 +194,13 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
     }
   }
 
-  Table createTable(IntegrationTestingUtility util, byte[] tableName) throws IOException {
+  Table createTable(IntegrationTestingUtility util, String tableName) throws IOException {
     try (Table table = util.createTable(TableName.valueOf(tableName), COLUMN_FAMILY)) {
       return table;
     }
   }
 
-  void createTableOnActiveCluster(IntegrationTestingUtility util, byte[] tableName)
+  void createTableOnActiveCluster(IntegrationTestingUtility util, String tableName)
     throws IOException, InterruptedException {
     LOG.info("kevin: start createTableOnActiveCluster()");
     assertIsActiveClusterUtil(util);
@@ -228,16 +228,16 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
     LOG.info("kevin: end replicaAdmin.refreshHFiles()");
   }
 
-  Result getRow(Connection conn, byte[] tableName, byte[] row) throws IOException {
+  Result getRow(Connection conn, String tableName, String row) throws IOException {
     try (Table table = conn.getTable(TableName.valueOf(tableName))) {
       // Verify no data was added to the replica cluster
-      Get get = new Get(row);
+      Get get = new Get(Bytes.toBytes(row));
       get.addColumn(COLUMN_FAMILY, QUALIFIER);
       return table.get(get);
     }
   }
 
-  void attemptPutOnReplicaCluster(IntegrationTestingUtility util, byte[] tableName) {
+  void attemptPutOnReplicaCluster(IntegrationTestingUtility util, String tableName) {
     LOG.info("kevin: start attemptPutOnReplicaCluster()");
     assertIsReplicaClusterUtil(util);
     byte[] row = Bytes.toBytes("impossiblePutRow");
@@ -247,7 +247,7 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
       put.addColumn(COLUMN_FAMILY, QUALIFIER, Bytes.toBytes("impossibleValue"));
       replicaTable.put(put);
       fail("An IOException should have occurred when trying to perform a Put on the '"
-        + Arrays.toString(tableName) + "' table in the replica cluster");
+        + tableName + "' table in the replica cluster");
     } catch (IOException e) {
       String expectedMsg = "Operation not allowed in Read-Only Mode";
       assertTrue("Expected an IOException with the following message: " + expectedMsg,

@@ -33,24 +33,24 @@ public class IntegrationTestActiveClusterSuffixId extends IntegrationTestReadRep
     validateActiveClusterSuffixFile(clusterA.getMaster().getClusterId(), "");
 
     // Create a table to prove Cluster A is the active cluster
-    createTableOnActiveCluster(utilA, Bytes.toBytes("testTable1"));
+    createTableOnActiveCluster(utilA, "testTable1");
 
     // Purposely fail to create a table on Cluster B to prove it is the replica cluster
-    attemptCreateOnReplicaCluster(utilB, Bytes.toBytes("badCreate1"));
+    attemptCreateOnReplicaCluster(utilB, "badCreate1");
 
     // Put Cluster A in read-only mode
     confA.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, true);
     utilA.notifyConfigurationObservers(clusterA);
 
     // Verify a table can no longer be created on Cluster A since it is now in read-only mode
-    attemptCreateOnReplicaCluster(utilA, Bytes.toBytes("badCreate2"));
+    attemptCreateOnReplicaCluster(utilA, "badCreate2");
 
     // Make Cluster B the active cluster
     confB.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, false);
     utilB.notifyConfigurationObservers(clusterB);
 
     // Verify a table can now be created on Cluster B since it is the active cluster
-    createTableOnActiveCluster(utilB, Bytes.toBytes("testTable2"));
+    createTableOnActiveCluster(utilB, "testTable2");
 
     // Verify the active cluster ID file has been updated with Cluster B's meta table suffix
     validateActiveClusterSuffixFile(clusterB.getMaster().getClusterId(), TEST_META_TABLE_SUFFIX);

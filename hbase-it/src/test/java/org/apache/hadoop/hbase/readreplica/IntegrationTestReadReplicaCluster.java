@@ -48,22 +48,22 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestReadReplic
   public void testReadReplicaCluster() throws IOException, InterruptedException {
     LOG.info("kevin: start of testReadReplicaCluster()");
     // Create a table. The replica cluster won't have this table until refresh_meta is run.
-    final byte[] table1 = Bytes.toBytes("testTable1");
+    final String table1 = "testTable1";
     attemptCreateOnReplicaCluster(utilB, table1);
     createTableOnActiveCluster(utilA, table1);
-    assertArrayEquals("The active cluster should have a table called " + Arrays.toString(table1),
-      table1, Arrays.stream(utilA.getAdmin().listTableNames()).toList().get(0).getName());
+    assertEquals("The active cluster should have a table called " + table1,
+      table1, utilA.getAdmin().listTableNames()[0].getNameAsString());
     assertTrue("The read replica cluster should not have any tables yet",
       Arrays.stream(utilB.getAdmin().listTableNames()).toList().isEmpty());
     refreshMeta(utilB);
-    assertFalse("The replica cluster should now have a table called " + Arrays.toString(table1),
+    assertFalse("The replica cluster should now have a table called " + table1,
       Arrays.stream(utilB.getAdmin().listTableNames()).toList().isEmpty());
 
     // Add data to the active cluster
-    byte[] row1 = Bytes.toBytes("row1");
+    final String row1 = "row1";
     try (Table activeTable = connectionA.getTable(TableName.valueOf(table1))) {
       // Add data to the active cluster
-      Put put = new Put(row1);
+      Put put = new Put(Bytes.toBytes(row1));
       put.addColumn(COLUMN_FAMILY, QUALIFIER, Bytes.toBytes("1"));
       activeTable.put(put);
     }
@@ -73,7 +73,7 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestReadReplic
 
     Result result = getRow(connectionA, table1, row1);
     assertFalse("The Get result should not be empty on the active cluster since data was inserted "
-      + "for row " + Arrays.toString(row1), result.isEmpty());
+      + "for row " + row1, result.isEmpty());
     utilA.getAdmin().flush(TableName.valueOf(table1));
 
     result = getRow(connectionB, table1, row1);
@@ -97,7 +97,7 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestReadReplic
     confA.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, true);
     utilA.notifyConfigurationObservers(clusterA);
     attemptPutOnReplicaCluster(utilA, table1);
-    final byte[] table2 = Bytes.toBytes("testTable2");
+    final String table2 = "testTable2";
     attemptCreateOnReplicaCluster(utilA, table2);
 
     confB.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, false);
