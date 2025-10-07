@@ -3,7 +3,6 @@ package org.apache.hadoop.hbase.readreplica;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.ActiveClusterSuffix;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.IntegrationTestBase;
 import org.apache.hadoop.hbase.IntegrationTestingUtility;
@@ -20,11 +19,9 @@ import org.apache.hadoop.hbase.master.region.MasterRegionFactory;
 import org.apache.hadoop.hbase.procedure2.ProcedureExecutor;
 import org.apache.hadoop.hbase.security.access.ReadOnlyController;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.hadoop.hbase.util.FSUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Set;
 import static org.apache.hadoop.hbase.HConstants.HBASE_CLIENT_RETRIES_NUMBER;
 import static org.apache.hadoop.hbase.HConstants.HBASE_DIR;
@@ -178,7 +175,7 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
       isReplicaClusterUtil(util));
   }
 
-  void attemptCreateOnReplicaCluster(IntegrationTestingUtility util, String tableName) {
+  void attemptFailedCreateOnReplicaCluster(IntegrationTestingUtility util, String tableName) {
     assertIsReplicaClusterUtil(util);
     // This createTable() call should throw an exception and take us to the catch block
     // fail() is supposed to not get executed
@@ -237,8 +234,8 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
     }
   }
 
-  void attemptPutOnReplicaCluster(IntegrationTestingUtility util, String tableName) {
-    LOG.info("kevin: start attemptPutOnReplicaCluster()");
+  void attemptFailedPutOnReplicaCluster(IntegrationTestingUtility util, String tableName) {
+    LOG.info("kevin: start attemptFailedPutOnReplicaCluster()");
     assertIsReplicaClusterUtil(util);
     byte[] row = Bytes.toBytes("impossiblePutRow");
     try (Table replicaTable = util.getConnection().getTable(TableName.valueOf(tableName))) {
@@ -253,7 +250,21 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
       assertTrue("Expected an IOException with the following message: " + expectedMsg,
         e.getMessage().contains(expectedMsg));
     }
-    LOG.info("kevin: end attemptPutOnReplicaCluster()");
+    LOG.info("kevin: end attemptFailedPutOnReplicaCluster()");
+  }
+
+  void putRowOnActiveCluster(IntegrationTestingUtility util, String tableName, String row) throws IOException {
+    LOG.info("kevin: start putRowOnActiveCluster");
+    assertIsActiveClusterUtil(util);
+    try (Table activeTable = util.getConnection().getTable(TableName.valueOf(tableName))) {
+      // Add data to the active cluster
+      Put put = new Put(Bytes.toBytes(row));
+      put.addColumn(COLUMN_FAMILY, QUALIFIER, Bytes.toBytes("1"));
+      LOG.info("about to perform put on active cluster");
+      activeTable.put(put);
+      LOG.info("done performing put on active cluster");
+    }
+    LOG.info("kevin: end putRowOnActiveCluster");
   }
 
   @Override

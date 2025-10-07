@@ -2,7 +2,6 @@ package org.apache.hadoop.hbase.readreplica;
 
 import org.apache.hadoop.hbase.ActiveClusterSuffix;
 import org.apache.hadoop.hbase.testclassification.IntegrationTests;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.FSUtils;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -36,14 +35,14 @@ public class IntegrationTestActiveClusterSuffixId extends IntegrationTestReadRep
     createTableOnActiveCluster(utilA, "testTable1");
 
     // Purposely fail to create a table on Cluster B to prove it is the replica cluster
-    attemptCreateOnReplicaCluster(utilB, "badCreate1");
+    attemptFailedCreateOnReplicaCluster(utilB, "badCreate1");
 
     // Put Cluster A in read-only mode
     confA.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, true);
     utilA.notifyConfigurationObservers(clusterA);
 
     // Verify a table can no longer be created on Cluster A since it is now in read-only mode
-    attemptCreateOnReplicaCluster(utilA, "badCreate2");
+    attemptFailedCreateOnReplicaCluster(utilA, "badCreate2");
 
     // Make Cluster B the active cluster
     confB.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, false);
