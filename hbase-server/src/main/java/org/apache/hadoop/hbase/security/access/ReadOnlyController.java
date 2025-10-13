@@ -73,6 +73,10 @@ public class ReadOnlyController implements MasterCoprocessor, RegionCoprocessor,
   private static final Logger LOG = LoggerFactory.getLogger(ReadOnlyController.class);
   private volatile boolean globalReadOnlyEnabled;
 
+  public boolean getGlobalReadOnlyEnabled() {
+    return this.globalReadOnlyEnabled;
+  }
+
   private void internalReadOnlyGuard() throws IOException {
     if (this.globalReadOnlyEnabled) {
       throw new IOException("Operation not allowed in Read-Only Mode");
@@ -99,6 +103,8 @@ public class ReadOnlyController implements MasterCoprocessor, RegionCoprocessor,
   @Override
   public void prePut(ObserverContext<? extends RegionCoprocessorEnvironment> c, Put put,
     WALEdit edit) throws IOException {
+    LOG.info("kevin: performing prePut in ReadOnlyController. hash code = {}", this.hashCode());
+    LOG.info("kevin: this.globalReadOnlyEnabled = {}", this.globalReadOnlyEnabled);
     TableName tableName = c.getEnvironment().getRegionInfo().getTable();
     if (tableName.isSystemTable()) {
       return;
@@ -244,6 +250,8 @@ public class ReadOnlyController implements MasterCoprocessor, RegionCoprocessor,
   @Override
   public void preCreateTable(ObserverContext<MasterCoprocessorEnvironment> ctx,
     TableDescriptor desc, RegionInfo[] regions) throws IOException {
+    LOG.info("kevin: performing preCreateTable in ReadOnlyController. hash code = {}", this.hashCode());
+    LOG.info("kevin: this.globalReadOnlyEnabled = {}", this.globalReadOnlyEnabled);
     internalReadOnlyGuard();
     MasterObserver.super.preCreateTable(ctx, desc, regions);
   }

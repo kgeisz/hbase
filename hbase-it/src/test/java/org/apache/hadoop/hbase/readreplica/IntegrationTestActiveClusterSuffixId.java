@@ -29,7 +29,7 @@ public class IntegrationTestActiveClusterSuffixId extends IntegrationTestReadRep
   public void testActiveClusterSuffixIdFile() throws IOException, InterruptedException {
     // The base integration test class starts the system with Cluster A as the active cluster and
     // Cluster B as the replica cluster
-    validateActiveClusterSuffixFile(clusterA.getMaster().getClusterId(), "");
+    validateActiveClusterSuffixFile(clusterA.getMaster().getClusterId(), CLUSTER_A_META_SUFFIX);
 
     // Create a table to prove Cluster A is the active cluster
     createTableOnActiveCluster(utilA, "testTable1");
@@ -52,6 +52,6 @@ public class IntegrationTestActiveClusterSuffixId extends IntegrationTestReadRep
     createTableOnActiveCluster(utilB, "testTable2");
 
     // Verify the active cluster ID file has been updated with Cluster B's meta table suffix
-    validateActiveClusterSuffixFile(clusterB.getMaster().getClusterId(), TEST_META_TABLE_SUFFIX);
+    validateActiveClusterSuffixFile(clusterB.getMaster().getClusterId(), CLUSTER_B_META_SUFFIX);
   }
 }

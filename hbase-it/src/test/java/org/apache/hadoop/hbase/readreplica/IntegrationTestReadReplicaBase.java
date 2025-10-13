@@ -2,10 +2,13 @@ package org.apache.hadoop.hbase.readreplica;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.IntegrationTestBase;
 import org.apache.hadoop.hbase.IntegrationTestingUtility;
+import org.apache.hadoop.hbase.NamespaceDescriptor;
 import org.apache.hadoop.hbase.SingleProcessHBaseCluster;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Connection;
@@ -19,9 +22,13 @@ import org.apache.hadoop.hbase.master.region.MasterRegionFactory;
 import org.apache.hadoop.hbase.procedure2.ProcedureExecutor;
 import org.apache.hadoop.hbase.security.access.ReadOnlyController;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.hbase.util.FSUtils;
+import org.junit.BeforeClass;
+import org.mockito.MockedStatic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Set;
 import static org.apache.hadoop.hbase.HConstants.HBASE_CLIENT_RETRIES_NUMBER;
 import static org.apache.hadoop.hbase.HConstants.HBASE_DIR;
@@ -31,12 +38,18 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 
 public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase {
+  public static final String IS_READ_REPLICA_INTEGRATION_TEST = null;
   protected static final Logger LOG =
     LoggerFactory.getLogger(IntegrationTestReadReplicaBase.class);
   protected static final String READ_ONLY_CONTROLLER_NAME = ReadOnlyController.class.getName();
-  protected static final String TEST_META_TABLE_SUFFIX = "2";
+  protected static final String CLUSTER_A_META_SUFFIX = "clusterA";
+  protected static final String CLUSTER_B_META_SUFFIX = "clusterB";
   // protected static final byte[] TABLE_NAME = Bytes.toBytes("testTable");
   protected static final byte[] COLUMN_FAMILY = Bytes.toBytes("cf1");
   protected static final byte[] QUALIFIER = Bytes.toBytes("q1");
@@ -50,10 +63,18 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
   Connection connectionB;
   Path rootDir;
   FileSystem fs;
+  static MockedStatic<TableName> tableNameMockedStatic;
 
   @Override
   public void setUpCluster() throws Exception {
     LOG.info("kevin: start setUpCluster");
+
+//    TableName clusterAMetaTable = TableName.valueOf(NamespaceDescriptor.SYSTEM_NAMESPACE_NAME_STR,
+//      "meta_" + CLUSTER_A_META_SUFFIX);
+//
+//    tableNameMockedStatic = mockStatic(TableName.class);
+//    tableNameMockedStatic.when(() -> TableName.initializeHbaseMetaTableName(any()))
+//      .thenReturn(clusterAMetaTable);
 
     // Set up and start the active cluster
     util = new IntegrationTestingUtility(); // The test fails if util is not set
@@ -63,14 +84,17 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
     confA.set(CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, READ_ONLY_CONTROLLER_NAME);
     confA.set(CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY, READ_ONLY_CONTROLLER_NAME);
     confA.set(CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, READ_ONLY_CONTROLLER_NAME);
+    confA.set(HBASE_META_TABLE_SUFFIX, CLUSTER_A_META_SUFFIX);
     // Minimize resource contention within the DFS
     confA.setInt("dfs.datanode.handler.count", 1);
     confA.setInt("dfs.namenode.handler.count", 1);
     // Prevent retries for Puts on the replica cluster that are expected to fail
     confA.setInt(HBASE_CLIENT_RETRIES_NUMBER, 0);
-    // activeConf.setInt("dfs.socket.timeout", 180*1000);
-    // activeConf.setInt("dfs.datanode.socket.write.timeout", 180*1000);
-    // activeConf.setInt("dfs.client-write-packet-timeout", 120*1000);
+    // confA.setInt("dfs.socket.timeout", 180*1000);
+    confA.setInt("dfs.datanode.socket.write.timeout", 120*1000);
+    confA.setInt("dfs.client.socket-timeout", 120*1000);
+//    confA.setInt("test.hbase.zookeeper.property.clientPort", 2181);
+    // confA.setInt("dfs.client-write-packet-timeout", 120*1000);
 
     LOG.info("kevin: starting clusterA minicluster");
     clusterA = utilA.startMiniCluster();
@@ -79,12 +103,18 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
     connectionA = utilA.getConnection();
 
     // Use the active cluster's existing configuration to set up and start the replica cluster
+//    TableName clusterBMetaTable = TableName.valueOf(NamespaceDescriptor.SYSTEM_NAMESPACE_NAME_STR,
+//      "meta_" + CLUSTER_B_META_SUFFIX);
+//    tableNameMockedStatic.when(() -> TableName.initializeHbaseMetaTableName(any()))
+//      .thenReturn(clusterBMetaTable);
     confB = HBaseConfiguration.create(confA);
     confB.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, true);
-    confB.set(HBASE_META_TABLE_SUFFIX, TEST_META_TABLE_SUFFIX);
+    confB.set(HBASE_META_TABLE_SUFFIX, CLUSTER_B_META_SUFFIX);
+//    confA.setInt("test.hbase.zookeeper.property.clientPort", 2182);
     utilB = new IntegrationTestingUtility(confB);
     utilB.setDataTestDirOnTestFS(utilA.getDataTestDirOnTestFS());
     utilB.setDFSCluster(utilA.getDFSCluster());
+    System.setProperty("hbase.meta.table.suffix", CLUSTER_B_META_SUFFIX);
     LOG.info("kevin: starting clusterB minicluster");
     clusterB = utilB.startMiniCluster();
     String rootDir2 = clusterB.getConfiguration().get(HBASE_DIR);
@@ -99,10 +129,18 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
     fs = clusterA.getMaster().getFileSystem();
     assertProperInitialization(rootDir1, rootDir2);
 
-    LOG.info("kevin: dfs.datanode.handler.count = {}",
+    RemoteIterator<LocatedFileStatus> f = fs.listFiles(new Path(clusterB.getConfiguration().get(HBASE_DIR)), false);
+
+//    Thread.sleep(30*60*1000);
+
+    LOG.info("kevin: confA dfs.datanode.handler.count = {}",
       confA.get("dfs.datanode.handler.count"));
-    LOG.info("kevin: dfs.namenode.handler.count = {}",
+    LOG.info("kevin: confA dfs.namenode.handler.count = {}",
       confA.get("dfs.namenode.handler.count"));
+    LOG.info("kevin: confB dfs.datanode.handler.count = {}",
+      confB.get("dfs.datanode.handler.count"));
+    LOG.info("kevin: confB dfs.namenode.handler.count = {}",
+      confB.get("dfs.namenode.handler.count"));
 
     LOG.info("kevin: end setUpCluster");
   }
@@ -126,10 +164,12 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
     utilA.restoreCluster();
     LOG.info("kevin: end restoring clusterA");
 
+//    tableNameMockedStatic.close();
+
     LOG.info("kevin: end cleanUpCluster");
   }
 
-  private void assertProperInitialization(String rootDir1, String rootDir2) throws IOException {
+  private void assertProperInitialization(String rootDir1, String rootDir2) throws IOException, InterruptedException {
     assertEquals("The root directories of each cluster should be the same", rootDir1, rootDir2);
     rootDir = new Path(rootDir1);
     LOG.info("{} for both clusters is: {}", HBASE_DIR, rootDir);
@@ -150,13 +190,12 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
       Boolean.parseBoolean(confB.get(HBASE_GLOBAL_READONLY_ENABLED_KEY)));
 
     // Each cluster should have its own MasterData directory
-    assertTrue("Expected " + MasterRegionFactory.MASTER_STORE_DIR + " to exist in the filesystem",
-      fs.exists(new Path(rootDir, MasterRegionFactory.MASTER_STORE_DIR)));
-    assertTrue(
-      "Expected " + MasterRegionFactory.MASTER_STORE_DIR + "_" + TEST_META_TABLE_SUFFIX
-        + " to exist in the filesystem",
-      fs.exists(
-        new Path(rootDir, MasterRegionFactory.MASTER_STORE_DIR + "_" + TEST_META_TABLE_SUFFIX)));
+    String clusterAMasterDataDir = MasterRegionFactory.MASTER_STORE_DIR + "_" + CLUSTER_A_META_SUFFIX;
+    assertTrue("Expected " + clusterAMasterDataDir + " to exist in the filesystem",
+      fs.exists(new Path(rootDir, clusterAMasterDataDir)));
+    String clusterBMasterDataDir = MasterRegionFactory.MASTER_STORE_DIR + "_" + CLUSTER_B_META_SUFFIX;
+    assertTrue("Expected " + clusterBMasterDataDir + " to exist in the filesystem",
+      fs.exists(new Path(rootDir, clusterBMasterDataDir)));
   }
 
   boolean isReplicaClusterUtil(IntegrationTestingUtility util) {
@@ -200,11 +239,35 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
   void createTableOnActiveCluster(IntegrationTestingUtility util, String tableName)
     throws IOException, InterruptedException {
     LOG.info("kevin: start createTableOnActiveCluster()");
+    LOG.info("kevin: creating table: {}", tableName);
     assertIsActiveClusterUtil(util);
     try (Table ignored = createTable(util, tableName)) {
       util.waitTableAvailable(TableName.valueOf(tableName));
     }
     LOG.info("kevin: end createTableOnActiveCluster()");
+  }
+
+  boolean doesClusterHaveTable(IntegrationTestingUtility util, String tableName)
+    throws IOException {
+    return Arrays.stream(util.getAdmin().listTableNames()).toList().contains(TableName.valueOf(tableName));
+  }
+
+  void assertTableExistsOnActiveCluster(IntegrationTestingUtility util, String tableName) throws IOException {
+    assertIsActiveClusterUtil(util);
+    assertTrue("The active cluster should have a table called " + tableName,
+      doesClusterHaveTable(util, tableName));
+  }
+
+  void assertTableExistsOnReplicaCluster(IntegrationTestingUtility util, String tableName) throws IOException {
+    assertIsReplicaClusterUtil(util);
+    assertTrue("The replica cluster should have a table called " + tableName,
+      doesClusterHaveTable(util, tableName));
+  }
+  void assertTableDoesNotExistOnReplicaCluster(IntegrationTestingUtility util, String tableName)
+    throws IOException {
+    assertIsReplicaClusterUtil(util);
+    assertFalse("The replica cluster should not have a table called " + tableName,
+      doesClusterHaveTable(util, tableName));
   }
 
   void refreshMeta(IntegrationTestingUtility util) throws IOException {

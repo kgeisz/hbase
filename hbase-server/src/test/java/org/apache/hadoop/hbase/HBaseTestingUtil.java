@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hbase;
 
+import static org.apache.hadoop.hbase.HConstants.HBASE_GLOBAL_READONLY_ENABLED_KEY;
 import static org.apache.hadoop.hbase.procedure2.ProcedureTestingUtility.assertProcNotFailed;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -91,6 +92,7 @@ import org.apache.hadoop.hbase.client.TableDescriptor;
 import org.apache.hadoop.hbase.client.TableDescriptorBuilder;
 import org.apache.hadoop.hbase.client.TableState;
 import org.apache.hadoop.hbase.coprocessor.CoprocessorHost;
+import org.apache.hadoop.hbase.coprocessor.RegionServerCoprocessor;
 import org.apache.hadoop.hbase.fs.HFileSystem;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.compress.Compression.Algorithm;
@@ -125,6 +127,7 @@ import org.apache.hadoop.hbase.security.User;
 import org.apache.hadoop.hbase.security.UserProvider;
 import org.apache.hadoop.hbase.security.access.AccessController;
 import org.apache.hadoop.hbase.security.access.PermissionStorage;
+import org.apache.hadoop.hbase.security.access.ReadOnlyController;
 import org.apache.hadoop.hbase.security.access.SecureTestUtil;
 import org.apache.hadoop.hbase.security.token.TokenProvider;
 import org.apache.hadoop.hbase.security.visibility.VisibilityLabelsCache;
@@ -144,6 +147,7 @@ import org.apache.hadoop.hbase.util.Threads;
 import org.apache.hadoop.hbase.wal.WAL;
 import org.apache.hadoop.hbase.wal.WALFactory;
 import org.apache.hadoop.hbase.zookeeper.EmptyWatcher;
+import org.apache.hadoop.hbase.zookeeper.MiniZooKeeperCluster;
 import org.apache.hadoop.hbase.zookeeper.ZKConfig;
 import org.apache.hadoop.hbase.zookeeper.ZKWatcher;
 import org.apache.hadoop.hdfs.DFSClient;
@@ -486,6 +490,7 @@ public class HBaseTestingUtil extends HBaseZKTestingUtil {
    * root directory.
    */
   public void setDataTestDirOnTestFS(Path path) {
+    LOG.info("kevin: setting dataTestDirOnTestFS to: {}", path.toString());
     dataTestDirOnTestFS = path;
   }
 
@@ -3757,29 +3762,46 @@ public class HBaseTestingUtil extends HBaseZKTestingUtil {
     assertProcNotFailed(procExecutor.getResult(procId));
   }
 
-  public void notifyConfigurationObservers(SingleProcessHBaseCluster cluster) {
+  public void notifyConfigurationObservers(SingleProcessHBaseCluster cluster) throws IOException {
     LOG.info("kevin: start notifyConfigurationObservers()");
-    // HMaster master = this.getHBaseCluster().getMaster();
-    // master.getConfigurationManager().notifyAllObservers(this.getConfiguration());
+    LOG.info("kevin: inside notifyConfigurationObservers {} = {}",
+      HBASE_GLOBAL_READONLY_ENABLED_KEY, this.getConfiguration().get(HBASE_GLOBAL_READONLY_ENABLED_KEY));
+
     List<MasterThread> masterThreads = cluster.getMasterThreads();
     LOG.info("kevin: masterThreads size = {}", masterThreads.size());
-
     List<HMaster> masters =
       cluster.getMasterThreads().stream().map(MasterThread::getMaster).toList();
     for (HMaster master : masters) {
       LOG.info("kevin: notifying observers on master with name {}", master.getServerName());
       master.getConfigurationManager().notifyAllObservers(this.getConfiguration());
+      LOG.info("kevin: master name = {}", master.getName());
     }
 
     List<RegionServerThread> regionServerThreads = cluster.getRegionServerThreads();
     LOG.info("kevin: regionServerThreads size = {}", regionServerThreads.size());
 
+    ReadOnlyController host;
     List<HRegionServer> regionServers = cluster.getRegionServerThreads().stream()
       .map(JVMClusterUtil.RegionServerThread::getRegionServer).toList();
     for (HRegionServer rs : regionServers) {
       LOG.info("kevin: notifying observers on region server with name {}", rs.getServerName());
       rs.getConfigurationManager().notifyAllObservers(this.getConfiguration());
+      LOG.info("kevin: region server name = {}", rs.getName());
+      host = (ReadOnlyController) rs.getRegionServerCoprocessorHost().findCoprocessor(
+        ReadOnlyController.class.getName());
+      LOG.info("kevin: region server ReadOnlyController object = {}", host);
+      LOG.info("kevin: region server after update getGlobalReadOnlyEnabled = {}", host.getGlobalReadOnlyEnabled());
+      List<HRegion> regions = rs.getRegions();
+      for (HRegion region : regions) {
+        region.getConfigurationManager().notifyAllObservers(this.getConfiguration());
+        host = (ReadOnlyController) region.getCoprocessorHost().findCoprocessor(
+          ReadOnlyController.class.getName());
+        LOG.info("kevin: single region after update getGlobalReadOnlyEnabled = {}", host.getGlobalReadOnlyEnabled());
+        LOG.info("kevin: region name = {}", region.getRegionInfo().getRegionNameAsString());
+      }
+
     }
+
     LOG.info("kevin: end notifyConfigurationObservers()");
   }
 
