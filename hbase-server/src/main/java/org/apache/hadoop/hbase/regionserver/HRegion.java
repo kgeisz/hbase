@@ -2062,6 +2062,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     return new ReadOnlyConfiguration(this.conf);
   }
 
+  @RestrictedApi(explanation = "Should only be called in tests", link = "",
+    allowedOnPath = ".*/src/test/.*")
+  public ConfigurationManager getConfigurationManager() {
+    return configurationManager;
+  }
+
   @Override
   public int getMinBlockSizeBytes() {
     return minBlockSizeBytes;
