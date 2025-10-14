@@ -21,21 +21,9 @@ import static org.apache.hadoop.hbase.HConstants.HBASE_GLOBAL_READONLY_ENABLED_K
 import static org.junit.Assert.*;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.HBaseConfiguration;
-import org.apache.hadoop.hbase.HRegionLocation;
-import org.apache.hadoop.hbase.IntegrationTestBackupRestore;
-import org.apache.hadoop.hbase.IntegrationTestingUtility;
 import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.client.RegionInfo;
-import org.apache.hadoop.hbase.client.RegionLocator;
 import org.apache.hadoop.hbase.client.Result;
-import org.apache.hadoop.hbase.client.Table;
-import org.apache.hadoop.hbase.regionserver.HRegion;
 import org.apache.hadoop.hbase.testclassification.IntegrationTests;
-import org.apache.hadoop.util.ToolRunner;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
@@ -54,7 +42,6 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestReadReplic
 
   @Test
   public void testReadReplicaCluster() throws IOException, InterruptedException {
-    LOG.info("kevin: start of testReadReplicaCluster()");
     final String table1 = "testTable1";
 
     // Prove a table cannot be created on Cluster B since it is the replica cluster
@@ -106,35 +93,11 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestReadReplic
     confB.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, false);
     utilB.notifyConfigurationObservers(clusterB);
     createTableOnActiveCluster(utilB, table2);
-//    Table table = connectionB.getTable(TableName.valueOf(table2));
-//    LOG.info("kevin: newly created table's HBASE_GLOBAL_READONLY_ENABLED_KEY = {}",
-//      table.getConfiguration().get(HBASE_GLOBAL_READONLY_ENABLED_KEY));
-//    RegionLocator rl = table.getRegionLocator();
-//    List<HRegionLocation> locations = rl.getAllRegionLocations();
-//    for (HRegionLocation location : locations) {
-//      RegionInfo regionInfo = location.getRegion();
-//      LOG.info("kevin: region info for {}: name = {}, table = {}", table2, regionInfo.getRegionNameAsString(), regionInfo.getTable().getNameAsString());
-//    }
-
-//    Thread.sleep(30*60*1000);
 
     assertTableExistsOnActiveCluster(utilB, table2);
     assertTableDoesNotExistOnReplicaCluster(utilA, table2);
-//    refreshMeta(utilA);
-//    assertTableExistsOnReplicaCluster(utilA, table2);
     final String row2 = "row2";
     putRowOnActiveCluster(utilB, table2, row2);
     utilB.getAdmin().flush(TableName.valueOf(table2));
-
-
-
-    String s = "e";
-  }
-
-  public static void main(String[] args) throws Exception {
-    Configuration conf = HBaseConfiguration.create();
-    IntegrationTestingUtility.setUseDistributedCluster(conf);
-    int status = ToolRunner.run(conf, new IntegrationTestReadReplicaCluster(), args);
-    System.exit(status);
   }
 }
