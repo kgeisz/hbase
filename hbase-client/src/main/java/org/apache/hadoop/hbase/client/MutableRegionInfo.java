@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
  * Package private. Use {@link RegionInfoBuilder} creating instances of {@link RegionInfo}s.
  */
 @InterfaceAudience.Private
-class MutableRegionInfo implements RegionInfo {
+public class MutableRegionInfo implements RegionInfo {
   private static final Logger LOG = LoggerFactory.getLogger(MutableRegionInfo.class);
   private static final int MAX_REPLICA_ID = 0xFFFF;
 
@@ -105,7 +105,7 @@ class MutableRegionInfo implements RegionInfo {
   /**
    * Package private constructor used constructing MutableRegionInfo for the first meta regions
    */
-  MutableRegionInfo(long regionId, TableName tableName, int replicaId) {
+  public MutableRegionInfo(long regionId, TableName tableName, int replicaId) {
     this(tableName, HConstants.EMPTY_START_ROW, HConstants.EMPTY_END_ROW, false, regionId,
       replicaId, false);
   }

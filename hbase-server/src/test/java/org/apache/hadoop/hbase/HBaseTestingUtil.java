@@ -400,6 +400,10 @@ public class HBaseTestingUtil extends HBaseZKTestingUtil {
     return super.getConfiguration();
   }
 
+  public boolean isMiniClusterRunning() {
+    return miniClusterRunning;
+  }
+
   public void setHBaseCluster(HBaseClusterInterface hbaseCluster) {
     this.hbaseCluster = hbaseCluster;
   }
@@ -1074,6 +1078,25 @@ public class HBaseTestingUtil extends HBaseZKTestingUtil {
     cleanupTestDir();
     miniClusterRunning = false;
     LOG.info("Minicluster is down");
+  }
+
+  /**
+   * Stops just the mini HBase and Zookeeper clusters. The mini DFS cluster may or may not still be
+   * running. This method is used for test cases where two HBase miniclusters share the same DFS
+   * minicluster, and we don't want the DFS cluster to be shut down when one of the HBase
+   * miniclusters is shut down. When an HBaseTestingUtil runs this method, its minicluster is
+   * considered to no longer be running, even if the DFS minicluster is still up. This method does
+   * not clean up the test directory.
+   * @throws Exception
+   */
+  public void shutDownMiniHBaseAndZKCluster() throws Exception {
+    LOG.info("Shutting down HBase minicluster");
+    shutdownMiniHBaseCluster();
+    LOG.info("HBase minicluster is down");
+    LOG.info("Shutting down Zookeeper minicluster");
+    shutdownMiniZKCluster();
+    LOG.info("Zookeeper minicluster is down");
+    miniClusterRunning = false;
   }
 
   /**

@@ -145,6 +145,7 @@ public class FSTableDescriptors implements TableDescriptors {
 
   public static TableDescriptor tryUpdateAndGetMetaTableDescriptor(Configuration conf,
     FileSystem fs, Path rootdir) throws IOException {
+    LOG.info("kevin: inside tryUpdateAndGetMetaTableDescriptor META_TABLE_NAME = {}", TableName.META_TABLE_NAME);
     // see if we already have meta descriptor on fs. Write one if not.
     Optional<Pair<FileStatus, TableDescriptor>> opt = getTableDescriptorFromFs(fs,
       CommonFSUtils.getTableDir(rootdir, TableName.META_TABLE_NAME), false);
