@@ -20,24 +20,16 @@ package org.apache.hadoop.hbase.backup.impl;
 import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.CONF_CONTINUOUS_BACKUP_PITR_WINDOW_DAYS;
 import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.CONF_CONTINUOUS_BACKUP_WAL_DIR;
 import static org.apache.hadoop.hbase.backup.BackupRestoreConstants.DEFAULT_CONTINUOUS_BACKUP_PITR_WINDOW_DAYS;
-import static org.apache.hadoop.hbase.backup.replication.BackupFileSystemManager.WALS_DIR;
-import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.ONE_DAY_IN_MILLISECONDS;
-import static org.apache.hadoop.hbase.backup.util.BackupUtils.DATE_FORMAT;
 import static org.apache.hadoop.hbase.mapreduce.WALPlayer.IGNORE_EMPTY_FILES;
 
 import java.io.IOException;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.TableName;
@@ -305,6 +297,63 @@ public abstract class AbstractPitrRestoreHandler {
 
     backupAdmin.restore(restoreRequest);
     replayWal(sourceTable, targetTable, backupMetadata.getStartTs(), endTime);
+
+    reBulkloadFiles(sourceTable, targetTable, backupMetadata.getStartTs(), endTime,
+      request.isKeepOriginalSplits(), request.getRestoreRootDir());
+  }
+
+  /**
+   * Re-applies/re-bulkloads store files discovered from WALs into the target table.
+   * <p>
+   * <b>Note:</b> this method re-uses the same {@link RestoreJob} MapReduce job that we originally
+   * implemented for performing full and incremental backup restores. The MR job (obtained via
+   * {@link BackupRestoreFactory#getRestoreJob(Configuration)}) is used here to perform an HFile
+   * bulk-load of the discovered store files into {@code targetTable}.
+   * @param sourceTable        source table name (used for locating bulk files and logging)
+   * @param targetTable        destination table to bulk-load the HFiles into
+   * @param startTime          start of WAL range (ms)
+   * @param endTime            end of WAL range (ms)
+   * @param keepOriginalSplits pass-through flag to control whether original region splits are
+   *                           preserved
+   * @param restoreRootDir     local/DFS path under which temporary and output dirs are created
+   * @throws IOException on IO or job failure
+   */
+  private void reBulkloadFiles(TableName sourceTable, TableName targetTable, long startTime,
+    long endTime, boolean keepOriginalSplits, String restoreRootDir) throws IOException {
+
+    Configuration conf = HBaseConfiguration.create(conn.getConfiguration());
+    conf.setBoolean(RestoreJob.KEEP_ORIGINAL_SPLITS_KEY, keepOriginalSplits);
+
+    String walBackupDir = conn.getConfiguration().get(CONF_CONTINUOUS_BACKUP_WAL_DIR);
+    Path walDirPath = new Path(walBackupDir);
+    conf.set(RestoreJob.BACKUP_ROOT_PATH_KEY, walDirPath.toString());
+
+    RestoreJob restoreService = BackupRestoreFactory.getRestoreJob(conf);
+
+    List<Path> bulkloadFiles = BackupUtils.collectBulkFiles(conn, sourceTable, targetTable,
+      startTime, endTime, new Path(restoreRootDir), new ArrayList<String>());
+
+    if (bulkloadFiles.isEmpty()) {
+      LOG.info("No bulk-load files found for {} in time range {}-{}. Skipping bulkload restore.",
+        sourceTable, startTime, endTime);
+      return;
+    }
+
+    Path[] pathsArray = bulkloadFiles.toArray(new Path[0]);
+
+    try {
+      // Use the existing RestoreJob MR job (the same MapReduce job used for full/incremental
+      // restores)
+      // to perform the HFile bulk-load of the discovered store files into `targetTable`.
+      restoreService.run(pathsArray, new TableName[] { sourceTable }, new Path(restoreRootDir),
+        new TableName[] { targetTable }, false);
+      LOG.info("Re-bulkload completed for {}", targetTable);
+    } catch (Exception e) {
+      String errorMessage =
+        String.format("Re-bulkload failed for %s: %s", targetTable, e.getMessage());
+      LOG.error(errorMessage, e);
+      throw new IOException(errorMessage, e);
+    }
   }
 
   /**
@@ -319,7 +368,7 @@ public abstract class AbstractPitrRestoreHandler {
       sourceTable, targetTable, startTime, endTime, walDirPath);
 
     List<String> validDirs =
-      getValidWalDirs(conn.getConfiguration(), walDirPath, startTime, endTime);
+      BackupUtils.getValidWalDirs(conn.getConfiguration(), walDirPath, startTime, endTime);
     if (validDirs.isEmpty()) {
       LOG.warn("No valid WAL directories found for range {} - {}. Skipping WAL replay.", startTime,
         endTime);
@@ -327,39 +376,6 @@ public abstract class AbstractPitrRestoreHandler {
     }
 
     executeWalReplay(validDirs, sourceTable, targetTable, startTime, endTime);
-  }
-
-  /**
-   * Fetches valid WAL directories based on the given time range.
-   */
-  private List<String> getValidWalDirs(Configuration conf, Path walBackupDir, long startTime,
-    long endTime) throws IOException {
-    FileSystem backupFs = FileSystem.get(walBackupDir.toUri(), conf);
-    FileStatus[] dayDirs = backupFs.listStatus(new Path(walBackupDir, WALS_DIR));
-
-    List<String> validDirs = new ArrayList<>();
-    SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);
-
-    for (FileStatus dayDir : dayDirs) {
-      if (!dayDir.isDirectory()) {
-        continue; // Skip files, only process directories
-      }
-
-      String dirName = dayDir.getPath().getName();
-      try {
-        Date dirDate = dateFormat.parse(dirName);
-        long dirStartTime = dirDate.getTime(); // Start of that day (00:00:00)
-        long dirEndTime = dirStartTime + ONE_DAY_IN_MILLISECONDS - 1; // End time of day (23:59:59)
-
-        // Check if this day's WAL files overlap with the required time range
-        if (dirEndTime >= startTime && dirStartTime <= endTime) {
-          validDirs.add(dayDir.getPath().toString());
-        }
-      } catch (ParseException e) {
-        LOG.warn("Skipping invalid directory name: " + dirName, e);
-      }
-    }
-    return validDirs;
   }
 
   /**

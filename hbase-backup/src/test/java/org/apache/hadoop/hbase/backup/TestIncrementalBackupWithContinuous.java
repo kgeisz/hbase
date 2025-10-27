@@ -173,30 +173,18 @@ public class TestIncrementalBackupWithContinuous extends TestBackupBase {
       performBulkLoad("bulk2", methodName);
       expectedRowCount += ROWS_IN_BULK_LOAD;
       assertEquals(expectedRowCount, TEST_UTIL.countRows(tableName1));
-      assertEquals(1, systemTable.readBulkloadRows(List.of(tableName1)).size());
+      assertTrue(systemTable.readBulkloadRows(List.of(tableName1)).isEmpty());
       loadTable(TEST_UTIL.getConnection().getTable(tableName1));
       Thread.sleep(15000);
 
-      // Creating an incremental backup clears the bulk loads
-      performBulkLoad("bulk4", methodName);
-      performBulkLoad("bulk5", methodName);
-      performBulkLoad("bulk6", methodName);
-      expectedRowCount += 3 * ROWS_IN_BULK_LOAD;
-      assertEquals(expectedRowCount, TEST_UTIL.countRows(table1));
-      assertEquals(4, systemTable.readBulkloadRows(List.of(table1)).size());
-      String backup2 = backupTables(BackupType.INCREMENTAL, List.of(table1), BACKUP_ROOT_DIR, true);
-      assertTrue(checkSucceeded(backup2));
-      assertEquals(expectedRowCount, TEST_UTIL.countRows(table1));
-      assertEquals(0, systemTable.readBulkloadRows(List.of(table1)).size());
-      int rowCountAfterBackup2 = expectedRowCount;
+      performBulkLoad("bulkPostIncr", methodName, tableName1);
+      assertTrue(systemTable.readBulkloadRows(List.of(tableName1)).isEmpty());
 
-      // Doing another bulk load, to check that this data will disappear after a restore operation
-      performBulkLoad("bulk7", methodName);
-      expectedRowCount += ROWS_IN_BULK_LOAD;
-      assertEquals(expectedRowCount, TEST_UTIL.countRows(table1));
-      List<BulkLoad> bulkloadsTemp = systemTable.readBulkloadRows(List.of(table1));
-      assertEquals(1, bulkloadsTemp.size());
-      BulkLoad bulk7 = bulkloadsTemp.get(0);
+      // Incremental backup
+      String backup2 =
+        backupTables(BackupType.INCREMENTAL, List.of(tableName1), BACKUP_ROOT_DIR, true);
+      assertTrue(checkSucceeded(backup2));
+      assertTrue(systemTable.readBulkloadRows(List.of(tableName1)).isEmpty());
 
       TEST_UTIL.truncateTable(tableName1);
       // Restore incremental backup

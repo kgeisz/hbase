@@ -195,6 +195,10 @@ public class TestBackupBase {
         Map<TableName, Map<String, Long>> newTableSetTimestampMap =
           backupManager.readLogTimestampMap();
 
+        Long newStartCode =
+          BackupUtils.getMinValue(BackupUtils.getRSLogTimestampMins(newTableSetTimestampMap));
+        backupManager.writeBackupStartCode(newStartCode);
+
         handleBulkLoad(backupInfo.getTableNames(), new HashMap<>(), new HashMap<>());
         failStageIf(Stage.stage_4);
 
