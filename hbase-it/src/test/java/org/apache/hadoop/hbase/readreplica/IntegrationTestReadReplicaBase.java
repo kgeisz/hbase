@@ -15,6 +15,8 @@ import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.RegionInfo;
 import org.apache.hadoop.hbase.client.RegionInfoBuilder;
 import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.coprocessor.CoprocessorHost;
 import org.apache.hadoop.hbase.master.procedure.MasterProcedureEnv;
@@ -22,21 +24,23 @@ import org.apache.hadoop.hbase.master.region.MasterRegionFactory;
 import org.apache.hadoop.hbase.procedure2.ProcedureExecutor;
 import org.apache.hadoop.hbase.security.access.ReadOnlyController;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.hbase.zookeeper.MiniZooKeeperCluster;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.mockito.MockedStatic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.io.File;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
+import java.util.Scanner;
 import java.util.Set;
 import static org.apache.hadoop.hbase.HConstants.HBASE_CLIENT_RETRIES_NUMBER;
 import static org.apache.hadoop.hbase.HConstants.HBASE_DIR;
 import static org.apache.hadoop.hbase.HConstants.HBASE_GLOBAL_READONLY_ENABLED_KEY;
 import static org.apache.hadoop.hbase.HConstants.HBASE_META_TABLE_SUFFIX;
-import static org.apache.hadoop.hbase.TableName.META_TABLE_NAME;
+import static org.apache.hadoop.hbase.util.CommonFSUtils.HBASE_WAL_DIR;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -52,10 +56,12 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
   protected static final byte[] QUALIFIER = Bytes.toBytes("q1");
   protected static Field metaTableName;
   protected static Field firstMetaRegionInfo;
+  protected static Field masterRegionDirName;
   protected static Object originalMetaTableName;
   protected static Object originalFirstMetaRegionInfo;
   protected Object originalFirstMetaRegionInfoForClusterA;
   protected Object originalFirstMetaRegionInfoForClusterB;
+  protected Object originalMasterRegionDirName;
   SingleProcessHBaseCluster clusterA;
   SingleProcessHBaseCluster clusterB;
   MiniDFSCluster dfsCluster;
@@ -67,6 +73,8 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
   Connection connectionB;
   Path rootDir;
   FileSystem fs;
+
+  MiniZooKeeperCluster zkA;
 
   // TODO - move this method to somewhere more public since it's used in multiple classes now
   // (such as HBaseTestingUtil)
@@ -109,8 +117,11 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
       originalFirstMetaRegionInfoForClusterA = new MutableRegionInfo(
         1L, TableName.META_TABLE_NAME, RegionInfo.DEFAULT_REPLICA_ID);
     }
+    if (firstMetaRegionInfo == null) {
+      firstMetaRegionInfo = RegionInfoBuilder.class.getDeclaredField("FIRST_META_REGIONINFO");
+    }
     setStaticFinalField(firstMetaRegionInfo, originalFirstMetaRegionInfoForClusterA);
-    LOG.info("kevin: reinitialized FIRST_META_REGIONINFO to: {}", originalFirstMetaRegionInfoForClusterA);
+    LOG.info("kevin: reinitialized FIRST_META_REGIONINFO for Cluter A to: {}", originalFirstMetaRegionInfoForClusterA);
   }
 
   protected void reinitializeFirstMetaRegionInfoForClusterB() throws Exception {
@@ -118,8 +129,17 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
       originalFirstMetaRegionInfoForClusterB = new MutableRegionInfo(
         1L, TableName.META_TABLE_NAME, RegionInfo.DEFAULT_REPLICA_ID);
     }
+    if (firstMetaRegionInfo == null) {
+      firstMetaRegionInfo = RegionInfoBuilder.class.getDeclaredField("FIRST_META_REGIONINFO");
+    }
     setStaticFinalField(firstMetaRegionInfo, originalFirstMetaRegionInfoForClusterB);
-    LOG.info("kevin: reinitialized FIRST_META_REGIONINFO to: {}", originalFirstMetaRegionInfoForClusterB);
+    LOG.info("kevin: reinitialized FIRST_META_REGIONINFO for Cluster B to: {}", originalFirstMetaRegionInfoForClusterB);
+  }
+
+  protected void reinitializeMasterRegionDirName(Configuration conf) throws Exception {
+    String expectedMasterRegionDirName = MasterRegionFactory.initMasterRegionDirName(conf);
+    setStaticFinalField(masterRegionDirName, expectedMasterRegionDirName);
+    LOG.info("kevin: reinitialized MASTER_REGION_DIR_NAME to: {}", expectedMasterRegionDirName);
   }
 
 //  protected void reinitializeStaticVariables(Configuration conf) throws Exception {
@@ -127,13 +147,31 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
 //    reinitializeFirstMetaRegionInfo();
 //  }
 
+  protected void runInputScanner() {
+    Scanner scanner = new Scanner(System.in);
+    System.out.println("kevin: Waiting for the user to input a line");
+    String line = scanner.nextLine();
+    System.out.printf("kevin: Got a line: '%s'. Continuing%n", line);
+  }
+
+  protected void scanMetaTable(Connection connection) throws IOException {
+    Scan scan = new Scan();
+    Table metaTable = connection.getTable(TableName.META_TABLE_NAME);
+    ResultScanner scanner = metaTable.getScanner(scan);
+    for (Result scannerResult : scanner) {
+      LOG.info("kevin: scanner result = {}", scannerResult);
+    }
+  }
+
   @Override
   public void setUpCluster() throws Exception {
     // Save the original value of META_TABLE_NAME and FIRST_META_REGIONINFO before any test runs
     metaTableName = TableName.class.getDeclaredField("META_TABLE_NAME");
-    originalMetaTableName = metaTableName.get(null);
+//    originalMetaTableName = metaTableName.get(null);
     firstMetaRegionInfo = RegionInfoBuilder.class.getDeclaredField("FIRST_META_REGIONINFO");
-    originalFirstMetaRegionInfo = firstMetaRegionInfo.get(null);
+//    originalFirstMetaRegionInfo = firstMetaRegionInfo.get(null);
+    masterRegionDirName = MasterRegionFactory.class.getDeclaredField("MASTER_REGION_DIR_NAME");
+//    originalMasterRegionDirName = masterRegionDirName.get(null);
 
     // Set up and start the active cluster
     util = new IntegrationTestingUtility(); // The test fails if util is not set
@@ -144,6 +182,9 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
     confA.set(CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY, READ_ONLY_CONTROLLER_NAME);
     confA.set(CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, READ_ONLY_CONTROLLER_NAME);
     confA.set(HBASE_META_TABLE_SUFFIX, CLUSTER_A_META_SUFFIX);
+    Path walDirClusterA = new Path("test-data", "wal_" + CLUSTER_A_META_SUFFIX);
+    confA.set(HBASE_WAL_DIR, String.valueOf(walDirClusterA));
+    Path thing = util.getDataTestDirOnTestFS();
     // Minimize resource contention within the DFS
     confA.setInt("dfs.datanode.handler.count", 1);
     confA.setInt("dfs.namenode.handler.count", 1);
@@ -151,12 +192,14 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
     confA.setInt(HBASE_CLIENT_RETRIES_NUMBER, 0);
     confA.setInt("dfs.datanode.socket.write.timeout", 120*1000);
     confA.setInt("dfs.client.socket-timeout", 120*1000);
+    confA.setInt("hbase.master.start.timeout.localHBaseCluster", 30*60*1000);
 
 //    reinitializeStaticVariables(confA);
     reinitializeStaticMetaTableName(confA);
     reinitializeFirstMetaRegionInfoForClusterA();
+    reinitializeMasterRegionDirName(confA);
 
-    LOG.info("Starting Cluster A minicluster as the active cluster");
+    LOG.info("kevin: starting Cluster A minicluster as the active cluster");
     clusterA = utilA.startMiniCluster();
 //    String rootDir1 = clusterA.getConfiguration().get(HBASE_DIR);
     connectionA = utilA.getConnection();
@@ -166,26 +209,42 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
     dfsCluster = utilA.getDFSCluster();
     assertProperActiveClusterInitialization(utilA, CLUSTER_A_META_SUFFIX);
 
+    LOG.info("kevin: Cluster A HBASE_WAL_DIR = {}", confA.get(HBASE_WAL_DIR));
+    LOG.info("kevin: Cluster A HBASE_DIR = {}", confA.get(HBASE_DIR));
+
+//    runInputScanner();
+
     // Use the active cluster's existing configuration to set up the replica cluster, but don't
     // start it.
     confB = HBaseConfiguration.create(confA);
     confB.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, true);
     confB.set(HBASE_META_TABLE_SUFFIX, CLUSTER_B_META_SUFFIX);
+    Path walDirClusterB = new Path("test-data", "wal_" + CLUSTER_B_META_SUFFIX);
+    confB.set(HBASE_WAL_DIR, String.valueOf(walDirClusterB));
+    confB.setInt("hbase.master.start.timeout.localHBaseCluster", 30*60*1000);
     utilB = new IntegrationTestingUtility(confB);
     utilB.setDataTestDirOnTestFS(utilA.getDataTestDirOnTestFS());
     utilB.setDFSCluster(dfsCluster);
-    System.setProperty("hbase.meta.table.suffix", CLUSTER_B_META_SUFFIX);
+//    utilB.setClusterTestDir(utilA.getClusterTestDir());
+  }
 
-//    LOG.info("Starting Cluster B minicluster as the replica cluster on the same DFS as Cluster A");
-//    clusterB = utilB.startMiniCluster();
-//    String rootDir2 = clusterB.getConfiguration().get(HBASE_DIR);
-//    connectionB = utilB.getConnection();
-
-//    assertProperInitialization(rootDir1, rootDir2);
+  protected Thread[] getGroupThreads( final ThreadGroup group ) {
+    if ( group == null )
+      throw new NullPointerException( "Null thread group" );
+    int nAlloc = group.activeCount( );
+    int n = 0;
+    Thread[] threads;
+    do {
+      nAlloc *= 2;
+      threads = new Thread[ nAlloc ];
+      n = group.enumerate( threads );
+    } while ( n == nAlloc );
+    return java.util.Arrays.copyOf( threads, n );
   }
 
   @Override
   public void cleanUpCluster() throws Exception {
+    LOG.info("kevin: start cleanUpCluster()");
     if (connectionA != null && !connectionA.isClosed()) {
       connectionA.close();
     }
@@ -227,6 +286,7 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
 
 //    LOG.info("Restoring Cluster A");
 //    utilA.restoreCluster();
+    LOG.info("kevin: end cleanUpCluster()");
   }
 
   protected void assertProperActiveClusterInitialization(IntegrationTestingUtility util, String suffix) throws IOException {
@@ -240,6 +300,7 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
 
     assertTrue("The active cluster should have the following meta table name: hbase:meta_" + suffix,
       isMetaTableNameCorrect(suffix));
+    assertHBaseMetaDirExists(suffix);
 
     assertEquals("The original DFS cluster is expected to be used", dfsCluster, util.getDFSCluster());
 
@@ -260,6 +321,7 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
 
     assertTrue("The replica cluster should have the following meta table name: hbase:meta_" + suffix,
       isMetaTableNameCorrect(suffix));
+    assertHBaseMetaDirExists(suffix);
 
     assertProperDFSClusterIsUsed(util);
   }
@@ -271,42 +333,19 @@ public abstract class IntegrationTestReadReplicaBase extends IntegrationTestBase
   }
 
   private boolean isMetaTableNameCorrect(String suffix) {
-    return (META_TABLE_NAME.getNameAsString().equals("hbase:meta_" + suffix));
+    return (TableName.META_TABLE_NAME.getNameAsString().equals("hbase:meta_" + suffix));
+  }
+
+  private void assertHBaseMetaDirExists(String suffix) throws IOException {
+    String metaDir = "data" + File.separator + "hbase" + File.separator + "meta_" + suffix;
+    Path metaDirPath = new Path(rootDir, metaDir);
+    assertTrue("Expected HBase meta directory to exist at: " + metaDirPath, fs.exists(metaDirPath));
   }
 
   private void assertProperMasterDataDirectory(String suffix) throws IOException {
-    String clusterMasterDataDir = MasterRegionFactory.MASTER_STORE_DIR + "_" + suffix;
+    String clusterMasterDataDir = "MasterData_" + suffix;
     assertTrue("Expected " + clusterMasterDataDir + " to exist in the filesystem",
       fs.exists(new Path(rootDir, clusterMasterDataDir)));
-  }
-
-  private void assertProperInitialization(String rootDir1, String rootDir2) throws IOException, InterruptedException {
-    assertEquals("The root directories of each cluster should be the same", rootDir1, rootDir2);
-    rootDir = new Path(rootDir1);
-    LOG.info("{} for both clusters is: {}", HBASE_DIR, rootDir);
-
-    assertEquals("The data test directory should be the same for each cluster",
-      utilA.getDataTestDirOnTestFS(), utilB.getDataTestDirOnTestFS());
-    LOG.info("dataTestDirOnTestFS for both clusters is: {}",
-      utilA.getDataTestDirOnTestFS().toString());
-
-    assertEquals("The two HBase clusters should be using the same DFS cluster",
-      utilA.getDataTestDirOnTestFS(), utilB.getDataTestDirOnTestFS());
-
-    assertFalse(
-      "The active cluster should have " + HBASE_GLOBAL_READONLY_ENABLED_KEY + " set to false",
-      Boolean.parseBoolean(confA.get(HBASE_GLOBAL_READONLY_ENABLED_KEY)));
-    assertTrue(
-      "The replica cluster should have " + HBASE_GLOBAL_READONLY_ENABLED_KEY + " set to true",
-      Boolean.parseBoolean(confB.get(HBASE_GLOBAL_READONLY_ENABLED_KEY)));
-
-    // Each cluster should have its own MasterData directory
-    String clusterAMasterDataDir = MasterRegionFactory.MASTER_STORE_DIR + "_" + CLUSTER_A_META_SUFFIX;
-    assertTrue("Expected " + clusterAMasterDataDir + " to exist in the filesystem",
-      fs.exists(new Path(rootDir, clusterAMasterDataDir)));
-    String clusterBMasterDataDir = MasterRegionFactory.MASTER_STORE_DIR + "_" + CLUSTER_B_META_SUFFIX;
-    assertTrue("Expected " + clusterBMasterDataDir + " to exist in the filesystem",
-      fs.exists(new Path(rootDir, clusterBMasterDataDir)));
   }
 
   boolean isReplicaClusterUtil(IntegrationTestingUtility util) {

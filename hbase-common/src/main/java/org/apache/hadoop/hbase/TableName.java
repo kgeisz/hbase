@@ -74,8 +74,9 @@ public final class TableName implements Comparable<TableName> {
   /**
    * The name of hbase meta table could either be hbase:meta_xxx or 'hbase:meta' otherwise. Config
    * hbase.meta.table.suffix will govern the decision of adding suffix to the habase:meta
+   * The variable is volatile because of integration testing and Java reflection.
    */
-  public static final TableName META_TABLE_NAME;
+  public static volatile TableName META_TABLE_NAME;
   static {
     Configuration conf = HBaseConfiguration.create();
     META_TABLE_NAME = initializeHbaseMetaTableName(conf);

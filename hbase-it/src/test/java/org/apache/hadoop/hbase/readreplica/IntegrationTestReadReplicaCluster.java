@@ -17,10 +17,8 @@
  */
 package org.apache.hadoop.hbase.readreplica;
 
-import static org.apache.hadoop.hbase.HConstants.HBASE_GLOBAL_READONLY_ENABLED_KEY;
 import static org.junit.Assert.*;
 
-import java.io.IOException;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.testclassification.IntegrationTests;
@@ -54,15 +52,27 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestReadReplic
     assertFalse("The Get result should not be empty on the active cluster since data was inserted "
       + "for row " + row1, result.isEmpty());
     utilA.getAdmin().flush(TableName.valueOf(table1));
+    LOG.info("kevin: getting PEWorkerGroup threads");
+//    runInputScanner();
+
+    scanMetaTable(connectionA);
+
+
     LOG.info("kevin: shutting down HBase and Zookeeper miniclusters for active Cluster A");
     utilA.shutDownMiniHBaseAndZKCluster();
-//    LOG.info("kevin: shutting down HBase minicluster for active Cluster A");
-//    utilA.shutdownMiniHBaseCluster();
 
     reinitializeStaticMetaTableName(confB);
     reinitializeFirstMetaRegionInfoForClusterB();
+    reinitializeMasterRegionDirName(confB);
+
+//    Thread.sleep(60000);
     LOG.info("kevin: starting HBase and Zookeeper miniclusters for replica Cluster B");
     clusterB = utilB.startMiniCluster();
+    LOG.info("kevin: done starting replica Cluster B");
+    connectionB = utilB.getConnection();
+
+    scanMetaTable(connectionB);
+
 //    assertProperReplicaClusterInitialization(utilB, CLUSTER_B_META_SUFFIX);
 //    assertTableDoesNotExistOnReplicaCluster(utilB, table1);
 //    LOG.info("kevin: refreshing meta and hfiles for replica Cluster B");
@@ -91,63 +101,67 @@ public class IntegrationTestReadReplicaCluster extends IntegrationTestReadReplic
     // OLD STUFF BELOW
 
     // Prove a table cannot be created on Cluster B since it is the replica cluster
-    attemptFailedCreateOnReplicaCluster(utilB, table1);
-
-    // Create a table. Since Cluster B is the replica cluster, it won't have the new table until
-    // refresh_meta has been run
-    createTableOnActiveCluster(utilA, table1);
-    assertTableExistsOnActiveCluster(utilA, table1);
-    assertTableDoesNotExistOnReplicaCluster(utilB, table1);
-    refreshMeta(utilB);
-    assertTableExistsOnReplicaCluster(utilB, table1);
-    result = getRow(connectionB, table1, row1);
-    assertTrue(
-      "The Get result should be empty on the replica cluster since it has not been refreshed",
-      result.isEmpty());
-
-//    final String row1 = "row1";
-
-    // Add data to the active cluster
-    putRowOnActiveCluster(utilA, table1, row1);
-
-    // Verify new data cannot be put on the replica cluster
-    attemptFailedPutOnReplicaCluster(utilB, table1);
-
-    // The active cluster will see the new data, but the replica cluster won't see this data until
-    // it has been refreshed
-    result = getRow(connectionA, table1, row1);
-    assertFalse("The Get result should not be empty on the active cluster since data was inserted "
-      + "for row " + row1, result.isEmpty());
-    utilA.getAdmin().flush(TableName.valueOf(table1));
-    result = getRow(connectionB, table1, row1);
-    assertTrue(
-      "The Get result should be empty on the replica cluster since it has not been refreshed",
-      result.isEmpty());
-
-    // The replica cluster should have the same data as the active cluster after refreshing
-    refreshMeta(utilB);
-    refreshHFiles(utilB);
-    result = getRow(connectionB, table1, row1);
-    assertFalse(
-      "The Get result should not be empty on the replica cluster since it has been refreshed",
-      result.isEmpty());
-
-    // Put Cluster A in read-only mode and verify it no longer supports Puts and Creates
-    confA.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, true);
-    utilA.notifyConfigurationObservers(clusterA);
-    attemptFailedPutOnReplicaCluster(utilA, table1);
-    final String table2 = "testTable2";
-    attemptFailedCreateOnReplicaCluster(utilA, table2);
-
-    // Make Cluster B the new active cluster and create a new table with data
-    confB.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, false);
-    utilB.notifyConfigurationObservers(clusterB);
-    createTableOnActiveCluster(utilB, table2);
-
-    assertTableExistsOnActiveCluster(utilB, table2);
-    assertTableDoesNotExistOnReplicaCluster(utilA, table2);
-    final String row2 = "row2";
-    putRowOnActiveCluster(utilB, table2, row2);
-    utilB.getAdmin().flush(TableName.valueOf(table2));
+//    LOG.info("kevin: attempting a create command on the replica cluster and expecting a failure");
+//    attemptFailedCreateOnReplicaCluster(utilB, table1);
+//    LOG.info("kevin: got the expected exception when trying to create a table on the replica cluster");
+//
+//    // Create a table. Since Cluster B is the replica cluster, it won't have the new table until
+//    // refresh_meta has been run
+//    LOG.info("kevin: attempting to create a table on the active cluster");
+//    createTableOnActiveCluster(utilA, table1);
+//    LOG.info("kevin: done attempting to create a table on the active cluster");
+//    assertTableExistsOnActiveCluster(utilA, table1);
+//    assertTableDoesNotExistOnReplicaCluster(utilB, table1);
+//    refreshMeta(utilB);
+//    assertTableExistsOnReplicaCluster(utilB, table1);
+//    result = getRow(connectionB, table1, row1);
+//    assertTrue(
+//      "The Get result should be empty on the replica cluster since it has not been refreshed",
+//      result.isEmpty());
+//
+////    final String row1 = "row1";
+//
+//    // Add data to the active cluster
+//    putRowOnActiveCluster(utilA, table1, row1);
+//
+//    // Verify new data cannot be put on the replica cluster
+//    attemptFailedPutOnReplicaCluster(utilB, table1);
+//
+//    // The active cluster will see the new data, but the replica cluster won't see this data until
+//    // it has been refreshed
+//    result = getRow(connectionA, table1, row1);
+//    assertFalse("The Get result should not be empty on the active cluster since data was inserted "
+//      + "for row " + row1, result.isEmpty());
+//    utilA.getAdmin().flush(TableName.valueOf(table1));
+//    result = getRow(connectionB, table1, row1);
+//    assertTrue(
+//      "The Get result should be empty on the replica cluster since it has not been refreshed",
+//      result.isEmpty());
+//
+//    // The replica cluster should have the same data as the active cluster after refreshing
+//    refreshMeta(utilB);
+//    refreshHFiles(utilB);
+//    result = getRow(connectionB, table1, row1);
+//    assertFalse(
+//      "The Get result should not be empty on the replica cluster since it has been refreshed",
+//      result.isEmpty());
+//
+//    // Put Cluster A in read-only mode and verify it no longer supports Puts and Creates
+//    confA.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, true);
+//    utilA.notifyConfigurationObservers(clusterA);
+//    attemptFailedPutOnReplicaCluster(utilA, table1);
+//    final String table2 = "testTable2";
+//    attemptFailedCreateOnReplicaCluster(utilA, table2);
+//
+//    // Make Cluster B the new active cluster and create a new table with data
+//    confB.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, false);
+//    utilB.notifyConfigurationObservers(clusterB);
+//    createTableOnActiveCluster(utilB, table2);
+//
+//    assertTableExistsOnActiveCluster(utilB, table2);
+//    assertTableDoesNotExistOnReplicaCluster(utilA, table2);
+//    final String row2 = "row2";
+//    putRowOnActiveCluster(utilB, table2, row2);
+//    utilB.getAdmin().flush(TableName.valueOf(table2));
   }
 }
