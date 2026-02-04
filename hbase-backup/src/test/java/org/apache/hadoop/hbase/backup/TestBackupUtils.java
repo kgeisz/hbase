@@ -17,10 +17,9 @@
  */
 package org.apache.hadoop.hbase.backup;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.security.PrivilegedAction;
@@ -42,9 +41,11 @@ import org.apache.hadoop.hbase.util.Addressing;
 import org.apache.hadoop.hbase.util.CommonFSUtils;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,7 +60,7 @@ public class TestBackupUtils {
   private static FileSystem dummyFs;
   private static Path backupRootDir;
 
-  @BeforeAll
+  @BeforeClass
   public static void setUp() throws IOException {
     dummyFs = TEST_UTIL.getTestFileSystem();
     backupRootDir = TEST_UTIL.getDataTestDirOnTestFS("backupUT");
@@ -198,22 +199,21 @@ public class TestBackupUtils {
           backupRootDir, startTime, endTime);
 
         // Verify the correct number of valid WAL dirs was found
-        assertEquals(numExpectedValidWalDirs, validWalDirs.size(),
-          "The number of valid WAL dirs should be " + numExpectedValidWalDirs + " for time zone "
-            + timeZone);
+        assertEquals("The number of valid WAL dirs should be " + numExpectedValidWalDirs
+          + " for time zone " + timeZone, numExpectedValidWalDirs, validWalDirs.size());
 
         // Verify the list of valid WAL dirs is as expected
         for (String dirName : expectedValidWalDirs) {
-          assertTrue(validWalDirs.stream().anyMatch(path -> path.endsWith("/" + dirName)),
-            "Expected " + dirName + " to be a valid WAL dir");
+          assertTrue("Expected " + dirName + " to be a valid WAL dir",
+            validWalDirs.stream().anyMatch(path -> path.endsWith("/" + dirName)));
         }
 
         // Verify the list of valid WAL dirs does not contain anything expected to be invalid
         List<String> expectedInvalidWalDirs = new ArrayList<>(availableWalDateDirs);
         expectedInvalidWalDirs.removeAll(expectedValidWalDirs);
         for (String dirName : expectedInvalidWalDirs) {
-          assertFalse(validWalDirs.contains(dirName),
-            "Expected " + dirName + " to NOT be a valid WAL dir");
+          assertFalse("Expected " + dirName + " to NOT be a valid WAL dir",
+            validWalDirs.contains(dirName));
         }
       }
     } finally {
