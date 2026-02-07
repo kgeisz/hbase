@@ -352,7 +352,7 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
     }
   }
 
-  private void createTable(TableName tableName) throws Exception {
+  protected void createTable(TableName tableName) throws Exception {
     long startTime, endTime;
 
     TableDescriptorBuilder builder = TableDescriptorBuilder.newBuilder(tableName);
@@ -370,7 +370,7 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
     LOG.info("Pre-split table created successfully in {}ms.", (endTime - startTime));
   }
 
-  private void loadData(TableName table, int numRows) throws IOException {
+  protected void loadData(TableName table, int numRows) throws IOException {
     Connection conn = util.getConnection();
     // #0- insert some data to a table
     Table t1 = conn.getTable(table);
@@ -379,12 +379,14 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
     conn.getAdmin().flush(TableName.valueOf(table.getName()));
   }
 
-  private String backup(BackupRequest request, BackupAdmin client, List<String> backupIds)
+  protected String backup(BackupRequest request, BackupAdmin client, List<String> backupIds)
     throws IOException {
     String backupId = client.backupTables(request);
     assertTrue(checkSucceeded(backupId));
     verifyBackupExists(backupId);
-    backupIds.add(backupId);
+    if (backupIds != null) {
+      backupIds.add(backupId);
+    }
     return backupId;
   }
 
@@ -396,8 +398,13 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
     client.mergeBackups(backupIds);
   }
 
-  private void delete(String[] backupIds, BackupAdmin client) throws IOException {
+  protected void delete(String[] backupIds, BackupAdmin client) throws IOException {
     client.deleteBackups(backupIds);
+  }
+
+  protected void pointInTimeRestore(PointInTimeRestoreRequest request, BackupAdmin client)
+    throws IOException {
+    client.pointInTimeRestore(request);
   }
 
   /**
@@ -515,7 +522,7 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
    * @param conn               Minicluster connection
    * @param latestPutTimestamp Timestamp of the latest Put operation on the backed-up table
    */
-  private void waitForCheckpointTimestampsToUpdate(Connection conn, long latestPutTimestamp,
+  protected void waitForCheckpointTimestampsToUpdate(Connection conn, long latestPutTimestamp,
     TableName tableName) throws IOException, InterruptedException {
     BackupSystemTable backupSystemTable = new BackupSystemTable(conn);
     Map<ServerName, Long> checkpointTimestamps = backupSystemTable.getBackupCheckpointTimestamps();
@@ -546,7 +553,7 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
    * @param table The backed-up table to scan
    * @return Timestamp of the most recent Put on the backed-up table
    */
-  private long getLatestPutTimestamp(Table table) throws IOException {
+  protected long getLatestPutTimestamp(Table table) throws IOException {
     Scan scan = new Scan();
     ResultScanner resultScanner = table.getScanner(scan);
     long timestamp = 0;
