@@ -260,10 +260,7 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
       LOG.info("Creating full backup image for {} with continuous backup {}", tableName,
         enabledOrDisabled);
       List<TableName> tables = Lists.newArrayList(tableName);
-      BackupRequest.Builder builder = new BackupRequest.Builder();
-      BackupRequest request = builder.withBackupType(BackupType.FULL).withTableList(tables)
-        .withTargetRootDir(backupRootDir).withContinuousBackupEnabled(isContinuousBackupEnabled)
-        .build();
+      BackupRequest request = createFullBackupRequest(tables, isContinuousBackupEnabled);
 
       String fullBackupId = backup(request, client, backupIds);
       LOG.info("Created full backup with ID: {}", fullBackupId);
@@ -292,10 +289,7 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
         // Do incremental backup
         LOG.info("Creating incremental backup number {} with continuous backup {} for {}", count,
           enabledOrDisabled, tableName);
-        builder = new BackupRequest.Builder();
-        request = builder.withBackupType(BackupType.INCREMENTAL).withTableList(tables)
-          .withTargetRootDir(backupRootDir).withContinuousBackupEnabled(isContinuousBackupEnabled)
-          .build();
+        request = createIncrementalBackupRequest(tables, isContinuousBackupEnabled);
         incrementalBackupId = backup(request, client, backupIds);
         LOG.info("Created incremental backup with ID: {}", incrementalBackupId);
 
@@ -607,6 +601,22 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
     try (BackupSystemTable table = new BackupSystemTable(util.getConnection())) {
       return table.readBackupInfo(backupId);
     }
+  }
+
+  protected BackupRequest createFullBackupRequest(List<TableName> tables,
+    boolean isContinuousBackupEnabled) {
+    BackupRequest.Builder builder = new BackupRequest.Builder();
+    return builder.withBackupType(BackupType.FULL).withTableList(tables)
+      .withTargetRootDir(backupRootDir).withContinuousBackupEnabled(isContinuousBackupEnabled)
+      .build();
+  }
+
+  protected BackupRequest createIncrementalBackupRequest(List<TableName> tables,
+    boolean isContinuousBackupEnabled) {
+    BackupRequest.Builder builder = new BackupRequest.Builder();
+    return builder.withBackupType(BackupType.INCREMENTAL).withTableList(tables)
+      .withTargetRootDir(backupRootDir).withContinuousBackupEnabled(isContinuousBackupEnabled)
+      .build();
   }
 
   /**
