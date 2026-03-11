@@ -163,6 +163,7 @@ public class HFileOutputFormat2 extends FileOutputFormat<ImmutableBytesWritable,
   static final String OUTPUT_TABLE_NAME_CONF_KEY = "hbase.mapreduce.hfileoutputformat.table.name";
   public static final String MULTI_TABLE_HFILEOUTPUTFORMAT_CONF_KEY =
     "hbase.mapreduce.use.multi.table.hfileoutputformat";
+  public static final boolean MULTI_TABLE_HFILEOUTPUTFORMAT_CONF_DEFAULT = true;
 
   /**
    * ExtendedCell and ExtendedCellSerialization are InterfaceAudience.Private. We expose this config

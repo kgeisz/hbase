@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hbase.mapreduce;
 
+import static org.apache.hadoop.hbase.mapreduce.HFileOutputFormat2.MULTI_TABLE_HFILEOUTPUTFORMAT_CONF_DEFAULT;
 import static org.apache.hadoop.hbase.mapreduce.HFileOutputFormat2.MULTI_TABLE_HFILEOUTPUTFORMAT_CONF_KEY;
 
 import java.io.IOException;
@@ -381,7 +382,10 @@ public class WALPlayer extends Configured implements Tool {
       FileOutputFormat.setOutputPath(job, outputDir);
       job.setMapOutputValueClass(MapReduceExtendedCell.class);
       try (Connection conn = ConnectionFactory.createConnection(conf)) {
-        if (conf.getBoolean(MULTI_TABLE_HFILEOUTPUTFORMAT_CONF_KEY, true)) {
+        if (
+          conf.getBoolean(MULTI_TABLE_HFILEOUTPUTFORMAT_CONF_KEY,
+            MULTI_TABLE_HFILEOUTPUTFORMAT_CONF_DEFAULT)
+        ) {
           // The HFiles will be output to something like this for each table:
           // .../BULK_OUTPUT_CONF_KEY/namespace/table/columnFamily
           List<TableInfo> tableInfoList = new ArrayList<TableInfo>();
