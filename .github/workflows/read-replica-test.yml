@@ -18,11 +18,11 @@ jobs:
         uses: docker/setup-compose-action@v2
 
       - name: Check container status (optional)
-        run: docker copose ps
+        run: docker compose -f dev-support/integration-test/docker-compose.test.yml ps
 
       # - name: Start Docker Clusters
       #   run: |
-      #     docker copose -f docker-compose.test.yml up -d
+      #     docker compose -f dev-support/integration-test/docker-compose.test.yml up -d
       #     echo "Waiting for HBase clusters to initialize..."
       #     # Self-healing check: Wait for Master UI to return 200 OK
       #     until $(curl --output /dev/null --silent --head --fail http://localhost:16010); do
@@ -34,4 +34,4 @@ jobs:
       - name: Clean up
         # This step runs automatically as a post-hook in many actions,
         # but you can also explicitly call it.
-        run: docker copose down
+        run: docker compose -f dev-support/integration-test/docker-compose.test.yml down
