@@ -1,9 +1,9 @@
-version: '3.8'
+# version: '3.8'
 
 # Variables are created in .env file
 services:
   hbase:
-    image: kgeisz/hbase-docker:read-replica
+    image: ${HBASE_IMAGE}
     platform: linux/amd64
     container_name: hbase-docker
     hostname: hbase-docker
@@ -15,7 +15,7 @@ services:
       - ./conf1/log4j2.properties:${HBASE_CONF_DIR}/log4j2.properties
 
   hbase2:
-    image: kgeisz/hbase-docker:read-replica
+    image: ${HBASE_IMAGE}
     platform: linux/amd64
     container_name: hbase-docker-2
     hostname: hbase-docker-2
