@@ -24,8 +24,11 @@ jobs:
           # Self-healing check: Wait for Master UI to return 200 OK
           echo "waiting 15 seconds"
           sleep 15
-          echo "running 'curl http://hbase-docker:16010'"
+          echo "running 'curl --head  http://localhost:16010'"
           curl --head  http://localhost:16010
+          echo "Running: curl --output /dev/null --silent --head --fail http://localhost:16010"
+          curl --output /dev/null --silent --head --fail http://localhost:16010
+          echo "return code: $?"
           # until $(curl --output /dev/null --silent --head --fail http://hbase-docker:16010); do
           #   printf '.'
           #   sleep 5
