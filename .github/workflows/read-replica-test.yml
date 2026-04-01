@@ -22,11 +22,15 @@ jobs:
           docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml up -d
           echo "Waiting for HBase clusters to initialize..."
           # Self-healing check: Wait for Master UI to return 200 OK
-          until $(curl --output /dev/null --silent --head --fail http://${HBASE_CONTAINER_NAME}:16010); do
-            printf '.'
-            sleep 5
-          done
-          echo "Clusters are up!"
+          echo "waiting 15 seconds"
+          sleep 15
+          echo "running 'curl http://${HBASE_CONTAINER_NAME}:16010'"
+          curl http://${HBASE_CONTAINER_NAME}:16010
+          # until $(curl http://${HBASE_CONTAINER_NAME}:16010); do
+          #   printf '.'
+          #   sleep 5
+          # done
+          # echo "Clusters are up!"
 
       - name: Check container status (optional)
         run: docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml ps
