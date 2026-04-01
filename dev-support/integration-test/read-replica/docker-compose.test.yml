@@ -5,8 +5,10 @@ services:
   hbase:
     image: ${HBASE_IMAGE}
     platform: linux/amd64
-    container_name: hbase-docker
-    hostname: hbase-docker
+    container_name: ${HBASE_CONTAINER_NAME}
+    hostname: ${HBASE_CONTAINER_NAME}
+    ports:
+      - 16010:16010 # Master UI
     volumes:
       - ./utils:/opt/utils
       - /tmp/data-store/hbase:/data-store/hbase
@@ -17,8 +19,10 @@ services:
   hbase2:
     image: ${HBASE_IMAGE}
     platform: linux/amd64
-    container_name: hbase-docker-2
-    hostname: hbase-docker-2
+    container_name: ${HBASE_CONTAINER_NAME}-2
+    hostname: ${HBASE_CONTAINER_NAME}-2
+    ports:
+      - 26010:16010 # Master UI
     volumes:
       - ./utils:/opt/utils
       - /tmp/data-store/hbase:/data-store/hbase
