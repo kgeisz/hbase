@@ -41,9 +41,9 @@ jobs:
           docker exec hbase-docker ls -la /data-store
           echo "Running docker exec hbase-docker ls -la /data-store/hbase"
           docker exec hbase-docker ls -la /data-store/hbase
-          # echo "Waiting for HBase clusters to initialize..."
-          # dev-support/integration-test/read-replica/verify-hbase-start.sh
-          # echo "Clusters are up!"
+          echo "Waiting for HBase clusters to initialize..."
+          dev-support/integration-test/read-replica/verify-hbase-start.sh
+          echo "Clusters are up!"
 
       - name: Check container status (optional)
         run: docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml ps
