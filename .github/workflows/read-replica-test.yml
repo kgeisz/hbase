@@ -31,3 +31,8 @@ jobs:
         # This step runs automatically as a post-hook in many actions,
         # but you can also explicitly call it.
         run: docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml down
+
+      - name: Dump Logs on Failure
+        if: failure()
+        run: |
+          docker logs hbase-docker
