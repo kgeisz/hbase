@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -x
 source "$(dirname ${0})/.env"
 
 wait_for_hbase_ui() {
