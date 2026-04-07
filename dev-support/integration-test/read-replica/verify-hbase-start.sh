@@ -1,16 +1,37 @@
 #!/usr/bin/env bash
 set -x
 source "$(dirname ${0})/.env"
+SLEEP_TIME=5
+MAX_RETRIES=12
 
 wait_for_hbase_ui() {
+  echo "Waiting for HBase UI to be available on ${2}"
+  attempts=1
   until $(curl --output /dev/null --silent --head --fail "http://localhost:${1}"); do
     echo -n "."
-    sleep 5
-    done
+    sleep "${SLEEP_TIME}"
+    ((attempts++))
+    if [ $attempts -gt $MAX_RETRIES ]; then
+      echo "Timeout waiting for HBase UI on ${2}"
+      exit 1
+    fi
+  done
   echo "HBase UI is up on ${2}"
 }
 
 check_server_status() {
+  echo "Attempting to get cluster status from HBase shell for ${1}"
+  attempts=1
+  until $(docker exec ${1} bash -c "echo \"status\" | hbase shell -n" >/dev/null 2>&1); do
+    echo -n "."
+    sleep "${SLEEP_TIME}"
+    ((attempts++))
+    if [ $attempts -gt $MAX_RETRIES ]; then
+      echo "Timeout waiting for HBase server status on ${1}"
+      exit 1
+    fi
+  done
+
   hbase_status=$(docker exec ${1} bash -c "echo \"status\" | hbase shell -n")
 
   if grep -q "1 active master" <<< $hbase_status; then
