@@ -35,9 +35,7 @@ check_server_status() {
   fi
 }
 
-# wait_for_hbase_ui ${ACTIVE_CLUSTER_PORT} "Active Cluster"
-# wait_for_hbase_ui ${REPLICA_CLUSTER_PORT} "Read Replica Cluster"
-# check_server_status ${HBASE_CONTAINER_NAME}
-# check_server_status ${HBASE_CONTAINER_NAME}-2
-sleep 15
-curl http://localhost:${ACTIVE_CLUSTER_PORT}
+wait_for_hbase_ui ${ACTIVE_CLUSTER_PORT} "Active Cluster"
+wait_for_hbase_ui ${REPLICA_CLUSTER_PORT} "Read Replica Cluster"
+check_server_status ${HBASE_CONTAINER_NAME}
+check_server_status ${HBASE_CONTAINER_NAME}-2
