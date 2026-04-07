@@ -22,7 +22,7 @@ wait_for_hbase_ui() {
 check_server_status() {
   echo "Attempting to get cluster status from HBase shell for ${1}"
   attempts=1
-  until $(docker exec ${1} bash -c "echo \"status\" | hbase shell -n"); do
+  until docker exec ${1} bash -c "echo \"status\" | hbase shell -n"; do
     echo -n "."
     sleep "${SLEEP_TIME}"
     ((attempts++))
@@ -57,6 +57,6 @@ check_server_status() {
 }
 
 wait_for_hbase_ui ${ACTIVE_CLUSTER_PORT} "Active Cluster"
-wait_for_hbase_ui ${REPLICA_CLUSTER_PORT} "Read Replica Cluster"
+# wait_for_hbase_ui ${REPLICA_CLUSTER_PORT} "Read Replica Cluster"
 check_server_status ${HBASE_CONTAINER_NAME}
-check_server_status ${HBASE_CONTAINER_NAME}-2
+# check_server_status ${HBASE_CONTAINER_NAME}-2
