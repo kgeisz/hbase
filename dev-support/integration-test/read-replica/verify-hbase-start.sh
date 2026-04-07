@@ -12,7 +12,7 @@ wait_for_hbase_ui() {
     sleep "${SLEEP_TIME}"
     ((attempts++))
     if [ $attempts -gt $MAX_RETRIES ]; then
-      echo "Timeout waiting for HBase UI on ${2}"
+      echo "Timeout while waiting for HBase UI on ${2}"
       exit 1
     fi
   done
@@ -22,12 +22,12 @@ wait_for_hbase_ui() {
 check_server_status() {
   echo "Attempting to get cluster status from HBase shell for ${1}"
   attempts=1
-  until $(docker exec ${1} bash -c "echo \"status\" | hbase shell -n" >/dev/null 2>&1); do
+  until $(docker exec ${1} bash -c "echo \"status\" | hbase shell -n"); do
     echo -n "."
     sleep "${SLEEP_TIME}"
     ((attempts++))
     if [ $attempts -gt $MAX_RETRIES ]; then
-      echo "Timeout waiting for HBase server status on ${1}"
+      echo "Timeout while waiting for HBase server status on ${1}"
       exit 1
     fi
   done
