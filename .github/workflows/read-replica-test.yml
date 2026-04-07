@@ -20,9 +20,30 @@ jobs:
       - name: Start Docker Clusters
         run: |
           docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml up -d
-          echo "Waiting for HBase clusters to initialize..."
-          dev-support/integration-test/read-replica/verify-hbase-start.sh
-          echo "Clusters are up!"
+          echo "whoami?"
+          whoami
+          # env
+          echo "Listing root directory"
+          ls -la /
+          echo "Listing /home"
+          ls -l /home
+          echo "Listing /home/runner"
+          ls -l /home/runner
+          echo "Listing /home/runner/data-store"
+          ls -la /home/runner/data-store
+          echo "Listing /home/runner/data-store/hbase"
+          ls -la /home/runner/data-store/hbase
+          echo "Running docker exec hbase-docker whoami"
+          docker exec hbase-docker whoami
+          echo "Running docker exec hbase-docker ls -la /"
+          docker exec hbase-docker ls -la /
+          echo "Running docker exec hbase-docker ls -la /data-store"
+          docker exec hbase-docker ls -la /data-store
+          echo "Running docker exec hbase-docker ls -la /data-store/hbase"
+          docker exec hbase-docker ls -la /data-store/hbase
+          # echo "Waiting for HBase clusters to initialize..."
+          # dev-support/integration-test/read-replica/verify-hbase-start.sh
+          # echo "Clusters are up!"
 
       - name: Check container status (optional)
         run: docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml ps
