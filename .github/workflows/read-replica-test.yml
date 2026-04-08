@@ -17,6 +17,15 @@ jobs:
         # This action ensures Docker Compose is installed and available
         uses: docker/setup-compose-action@v2
 
+      - name: Prepare Host Data Directory
+        run: |
+          # 1. Create the directory on the runner host
+          mkdir -p /home/runner/data-store/hbase /home/runner/data-store/run /home/runner/data-store/logs /home/runner/data-store/zk
+          # 2. Change ownership to UID 1000 (matches 'hbase' user in Dockerfile)
+          sudo chown -R 1000:1000 /home/runner/data-store
+          # 3. Verify permissions on the host
+          ls -ln /home/runner/data-store
+
       - name: Start Docker Clusters
         run: |
           docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml up -d
