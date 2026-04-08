@@ -19,6 +19,8 @@ jobs:
 
       - name: Prepare Host Data Directory
         run: |
+          python --version
+          python3 --version
           # Create the directory on the runner host
           mkdir -p /home/runner/data-store/hbase /home/runner/data-store/run \
                    /home/runner/data-store/logs /home/runner/data-store/zk
