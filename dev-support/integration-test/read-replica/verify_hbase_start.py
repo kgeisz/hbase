@@ -1,23 +1,13 @@
 #!/usr/bin/env python3
-import os
 import time
 import subprocess
-import sys
 import requests
 from dotenv import load_dotenv
+from hbase_docker_client import get_env, HBaseDockerClient
 
 # Constants for retries
 SLEEP_TIME = 5
 MAX_RETRIES = 12
-
-
-def get_env(key, default=None):
-    """Retrieve environment variables, ensuring they are loaded from the GitHub Actions runner."""
-    val = os.environ.get(key, default)
-    if val is None:
-        print(f"Error: Environment variable {key} is not set.")
-        sys.exit(1)
-    return val
 
 
 def wait_for_hbase_ui(port, cluster_name):
@@ -56,7 +46,7 @@ def check_server_status(container_name, cluster_name):
             validations = {
                 "Active Master": "1 active master" in output,
                 "Region Server": "1 servers" in output,
-                "No Dead Server": "0 dead" in output
+                "No Dead Servers": "0 dead" in output
             }
 
             if all(validations.values()):
@@ -83,13 +73,18 @@ if __name__ == "__main__":
     replica_port = get_env('REPLICA_CLUSTER_PORT')
     container_base = get_env('HBASE_CONTAINER_NAME')
 
-    # Check Active Cluster
-    wait_for_hbase_ui(active_port, "Active Cluster")
-    check_server_status(container_base, "Active Cluster")
+    active_cluster = HBaseDockerClient(container_name=container_base,
+                                       hbase_ui_port=active_port,
+                                       cluster_name="Active Cluster")
+    replica_cluster = HBaseDockerClient(container_name=f"{container_base}-2",
+                                        hbase_ui_port=replica_port,
+                                        cluster_name="Replica Cluster")
 
-    # Check Read-Replica Cluster
-    wait_for_hbase_ui(replica_port, "Read-Replica Cluster")
-    check_server_status(f"{container_base}-2", "Read-Replica Cluster")
+    active_cluster.wait_for_hbase_ui()
+    active_cluster.check_server_status()
+
+    replica_cluster.wait_for_hbase_ui()
+    replica_cluster.check_server_status()
 
     print("\n" + "=" * 40)
     print("ALL CLUSTERS VERIFIED AND READY")
