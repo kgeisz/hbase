@@ -15,7 +15,7 @@ if __name__ == "__main__":
                                        cluster_name="Active Cluster")
     replica_cluster = HBaseDockerClient(container_name=f"{container_base}-2",
                                         hbase_ui_port=replica_port,
-                                        cluster_name="Replica Cluster")
+                                        cluster_name="Read-Replica Cluster")
 
     active_cluster.wait_for_hbase_ui()
     active_cluster.check_server_status()
