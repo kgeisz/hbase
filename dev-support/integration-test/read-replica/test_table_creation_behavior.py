@@ -49,7 +49,6 @@ def test_table_creation_behavior(active_cluster, replica_cluster, table_name, co
          f"after drop attempt")
 
     # Drop the table on the active cluster
-    logger.info(f"Dropping table '{table_name}' on {active_cluster.name}")
     active_cluster.disable_table(table_name)
     active_cluster.drop_table(table_name)
 
