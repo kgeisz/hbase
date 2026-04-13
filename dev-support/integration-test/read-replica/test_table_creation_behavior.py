@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-import logging
-
 from dotenv import load_dotenv
 from environment_loader import get_env
 from hbase_docker_client import HBaseDockerClient, HBaseShellCommandError
+from logger_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def test_table_creation_behavior(active_cluster, replica_cluster, table_name, column_family):
@@ -99,9 +98,7 @@ def verify_invalid_read_only_command_occurs(replica_cluster, cmd_type, table_nam
 
 
 if __name__ == "__main__":
-    logging.basicConfig(format='%(asctime)s %(levelname)-5s %(module)s.%(funcName)s(%(lineno)d): '
-                               '%(message)s',
-                        level=logging.INFO)
+    # Load settings from .env file
     load_dotenv()
     container_name = get_env("HBASE_CONTAINER_NAME")
     table_name = "t1"
