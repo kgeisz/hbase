@@ -111,7 +111,6 @@ class HBaseDockerClient:
         if f"Created table {table_name}" not in output:
             logger.error(f"Could not create table '{table_name}' on {self._cluster_name}")
             return False
-        logger.info(f"Created table '{table_name}' on {self._cluster_name}")
         return True
 
     def list_tables(self):
@@ -135,7 +134,7 @@ class HBaseDockerClient:
         self.__run_hbase_command(f"disable '{table_name}'")
 
     def drop_table(self, table_name):
-        logger.debug(f"Dropping table '{table_name}' on {self.name}")
+        logger.info(f"Dropping table '{table_name}' on {self.name}")
         self.__run_hbase_command(f"drop '{table_name}'")
 
     def refresh_meta(self):
@@ -160,9 +159,9 @@ class HBaseDockerClient:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(format='%(asctime)s %(module)s.%(funcName)s(%(lineno)d) '
-                               '%(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(format='%(asctime)s %(levelname)-5s %(module)s.%(funcName)s(%(lineno)d): '
+                               '%(message)s',
+                        level=logging.INFO)
     load_dotenv()
     container_name = get_env("HBASE_CONTAINER_NAME")
     table_name = "t1"
@@ -176,6 +175,8 @@ if __name__ == "__main__":
                                         cluster_name="Read-Replica Cluster")
     try:
         # Delete any lingering tables
+        logger.info(f"Checking if table '{table_name}' already exists on {active_cluster.name} "
+                    f"and dropping it if necessary")
         HBaseDockerClient.clean_up_tables(active_cluster, replica_cluster)
 
         active_cluster.create_table(table_name, column_family)
@@ -199,7 +200,7 @@ if __name__ == "__main__":
              f"after running refresh_meta")
 
         # Cannot drop the table on the Read-Replica cluster. A DoNotRetryIOException should occur
-        logger.info(f"Verifying {replica_cluster.name} cannot drop '{table_name}' since it is in"
+        logger.info(f"Verifying {replica_cluster.name} cannot drop '{table_name}' since it is in "
                     f"read-only mode")
         replica_cluster.disable_table(table_name)
         try:
