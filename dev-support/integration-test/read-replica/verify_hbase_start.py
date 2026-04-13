@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
+import logging
+
 from dotenv import load_dotenv
 from environment_loader import get_env
 from hbase_docker_client import HBaseDockerClient
 
+logger = logging.getLogger(__name__)
+
 
 if __name__ == "__main__":
+    logging.basicConfig(format='%(asctime)s %(levelname)-5s %(module)s.%(funcName)s(%(lineno)d): '
+                               '%(message)s',
+                        level=logging.INFO)
     # Load setting from .env file
     load_dotenv()
     active_port = get_env('ACTIVE_CLUSTER_PORT')
@@ -24,6 +31,6 @@ if __name__ == "__main__":
     replica_cluster.wait_for_hbase_ui()
     replica_cluster.check_server_status()
 
-    print("\n" + "=" * 40)
-    print("ALL CLUSTERS VERIFIED AND READY")
-    print("=" * 40)
+    logger.info("\n" + "=" * 40)
+    logger.info("ALL CLUSTERS VERIFIED AND READY")
+    logger.info("=" * 40)
