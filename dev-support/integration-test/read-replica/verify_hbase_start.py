@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from dotenv import load_dotenv
-from hbase_docker_client import get_env, HBaseDockerClient
+from environment_loader import get_env
+from hbase_docker_client import HBaseDockerClient
 
 
 if __name__ == "__main__":
