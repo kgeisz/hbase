@@ -39,8 +39,9 @@ jobs:
           python3 dev-support/integration-test/read-replica/verify_hbase_start.py
           echo "Clusters are up!"
 
-      - name: Check container status (optional)
-        run: docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml ps
+      - name: Test Table Creation Behavior
+        run: |
+          python3 dev-support/integration-test/read-replica/test_table_creation_behavior.py
 
       - name: Clean up
         run: docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml down
