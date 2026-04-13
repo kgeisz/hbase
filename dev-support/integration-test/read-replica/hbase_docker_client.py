@@ -6,7 +6,9 @@ import subprocess
 import time
 import requests
 
-logger = logging.getLogger(__name__)
+from logger_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class HBaseShellCommandError(Exception):
@@ -29,7 +31,7 @@ class HBaseDockerClient:
     def wait_for_hbase_ui(self):
         """Checks for a 200 OK on the HBase Master UI."""
         url = f"http://localhost:{self._hbase_ui_port}"
-        logger.info(f"--- Waiting for HBase UI: {self._cluster_name} on {url} ---")
+        logger.info(f"Waiting for HBase UI: {self._cluster_name} on {url}")
         last_exception = None
         for attempt in range(1, self._max_retries + 1):
             try:
@@ -48,7 +50,7 @@ class HBaseDockerClient:
 
     def check_server_status(self):
         """Runs 'status' inside the HBase shell and validates the output."""
-        logger.info(f"--- Validating Cluster Status: {self._cluster_name} ({self._container_name}) ---")
+        logger.info(f"Validating Cluster Status: {self._cluster_name} ({self._container_name})")
         for attempt in range(1, self._max_retries + 1):
             try:
                 output = self.get_hbase_status()
