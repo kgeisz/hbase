@@ -136,9 +136,88 @@ class HBaseDockerClient:
         logger.info(f"Dropping table '{table_name}' on {self.name}")
         self.__run_hbase_command(f"drop '{table_name}'")
 
+    def put(self, table_name, row, column, data, spec_map=None):
+        """
+        Performs an HBase put command.
+        :param table_name: the table we are inserting data into
+        :param row: row of the table we are inserting data into
+        :param column: column of the table we are inserting data into
+        :param data: the actual data we are inserting (as a string)
+        :param spec_map: additional attributes input as a string
+                         (e.g. "{ATTRIBUTES=>{'my-key'=>'my-value'}}")
+        """
+        logger.info(f"Adding data to table '{table_name}' on {self.name}")
+        put_cmd = f"put '{table_name}', '{row}', '{column}', '{data}'"
+        if spec_map:
+            put_cmd += f", {spec_map}"
+        self.__run_hbase_command(put_cmd)
+
+    def get(self, table_name, row, column=None, spec_map=None):
+        logger.info(f"Getting data from table '{table_name}' on {self.name}")
+        get_cmd = f"get '{table_name}', '{row}'"
+        if column:
+            get_cmd += f", '{column}'"
+        if spec_map:
+            get_cmd += f", {spec_map}"
+        output = self.__run_hbase_command(get_cmd)
+        logger.debug(f"Got data:\n{output}")
+        return output
+
+    def delete(self, table_name, row, column, timestamp=None, spec_map=None):
+        logger.info(f"Deleting data from table '{table_name}' on {self.name}")
+        delete_cmd = f"delete '{table_name}', '{row}', '{column}'"
+        if timestamp:
+            delete_cmd += f", {table_name}"
+        if spec_map:
+            delete_cmd += f", {spec_map}"
+        self.__run_hbase_command(delete_cmd)
+
+    def flush(self, table_name):
+        logger.debug(f"Flushing table '{table_name}'")
+        self.__run_hbase_command(f"flush '{table_name}'")
+
     def refresh_meta(self):
         logger.debug(f"Refreshing meta on {self.name}")
         self.__run_hbase_command("refresh_meta")
+
+    def refresh_hfiles(self):
+        logger.debug(f"Refreshing HFiles on {self.name}")
+        self.__run_hbase_command("refresh_hfiles")
+
+    @staticmethod
+    def verify_read_only_error_occurs(cluster, cmd_type, table_name, column,
+                                      row=None, value=None):
+        """
+        Runs a command on read-only cluster and expects an error to occur as a result.
+        """
+        logger.info(f"Verifying we cannot perform a '{cmd_type}' on {cluster.name} "
+                    f"since it is in read-only mode")
+        try:
+            # This should throw an exception
+            match cmd_type.lower():
+                case 'create':
+                    cluster.create_table(table_name, column)
+                case 'drop':
+                    cluster.drop_table(table_name)
+                case 'put':
+                    cluster.put(table_name, column, row, value)
+                case 'delete':
+                    cluster.delete(table_name, row, column)
+                case _:
+                    raise RuntimeError(f"Unexpected command type: {cmd_type}")
+
+            # If we get here, then the command succeeded on the read-replica cluster, which should
+            # not have happened.
+            raise RuntimeError(f"Expected {cmd_type} attempt on {cluster.name} "
+                               f"to result in an error")
+        except HBaseShellCommandError as e:
+            # Verify the command we ran on the read-replica cluster produced the expected exception
+            expected_error = ("org.apache.hadoop.hbase.WriteAttemptedOnReadOnlyClusterException: "
+                              "Operation not allowed in Read-Only Mode")
+            assert expected_error in str(e), (f"Expected exception to contain the following: "
+                                              f"{expected_error}\n"
+                                              f"The actual exception was:\n{e}")
+        logger.info(f"{cmd_type.capitalize()} attempt on {cluster.name} failed as expected")
 
     @staticmethod
     def clean_up_tables(active_cluster, replica_cluster):
@@ -152,6 +231,6 @@ class HBaseDockerClient:
             for table in tables:
                 active_cluster.disable_table(table)
                 active_cluster.drop_table(table)
-            logger.info(f"Running 'refresh_meta' on {replica_cluster.name} cluster to sync it with "
+            logger.info(f"Running 'refresh_meta' on {replica_cluster.name} to sync it with "
                         f"the {active_cluster.name}")
             replica_cluster.refresh_meta()

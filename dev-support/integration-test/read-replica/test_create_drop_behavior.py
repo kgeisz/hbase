@@ -15,8 +15,8 @@ def test_table_creation_behavior(active_cluster, replica_cluster, table_name, co
     tables cannot be created/dropped on the replica cluster.
     """
     # We should not be able to create a new table on the read-replica cluster
-    verify_invalid_read_only_command_occurs(replica_cluster, 'create',
-                                            table_name, column_family)
+    HBaseDockerClient.verify_read_only_error_occurs(replica_cluster, 'create',
+                                                    table_name, column_family)
 
     active_cluster.create_table(table_name, column_family)
 
@@ -40,8 +40,8 @@ def test_table_creation_behavior(active_cluster, replica_cluster, table_name, co
 
     # Cannot drop the table on the Read-Replica cluster. A DoNotRetryIOException should occur
     replica_cluster.disable_table(table_name)
-    verify_invalid_read_only_command_occurs(replica_cluster, 'drop',
-                                            table_name, column_family)
+    HBaseDockerClient.verify_read_only_error_occurs(replica_cluster, 'drop',
+                                                    table_name, column_family)
     # The table should still exist on the read-replica cluster since drops are not allowed
     assert replica_cluster.verify_table_exists(table_name), \
         (f"Expected table '{table_name}' to still exist on {replica_cluster.name} "
