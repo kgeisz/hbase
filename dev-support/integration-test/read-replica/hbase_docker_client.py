@@ -4,11 +4,16 @@ import logging
 import re
 import subprocess
 import time
+import xml.etree.ElementTree as ET
 import requests
 
 from logger_config import get_logger
 
 logger = get_logger(__name__)
+
+
+class DockerExecCommandError(Exception):
+    pass
 
 
 class HBaseShellCommandError(Exception):
@@ -17,12 +22,13 @@ class HBaseShellCommandError(Exception):
 
 class HBaseDockerClient:
     def __init__(self, container_name, hbase_ui_port=16010, cluster_name="HBase Cluster",
-                 max_retries=12, sleep_time=5):
+                 max_retries=12, sleep_time=5, local_conf='conf/hbase-site.xml'):
         self._container_name = container_name
         self._hbase_ui_port = hbase_ui_port
         self._cluster_name = cluster_name
         self._max_retries = max_retries
         self._sleep_time = sleep_time
+        self._local_conf = local_conf
 
     @property
     def name(self):
@@ -82,6 +88,21 @@ class HBaseDockerClient:
 
         raise RuntimeError(
             f"\nTIMEOUT: {self._cluster_name} shell check failed after {self._max_retries} attempts.")
+
+    def __run_command(self, bash_cmd):
+        cmd = ["docker", "exec", self._container_name, "bash", "-c", f'''{bash_cmd}''']
+        cmd_str = ' '.join(cmd)
+        logger.debug(f"Running command on {self._cluster_name}: {cmd_str}")
+        process = subprocess.run(cmd, capture_output=True)
+        stdout = process.stdout.decode('utf-8')
+        if process.returncode != 0:
+            raise DockerExecCommandError(f"The following docker exec command failed on "
+                                         f"{self._cluster_name} ({self._container_name}): "
+                                         f"{bash_cmd}\nThe docker command used to run this was: "
+                                         f"{cmd_str}\nThe command's STDERR was:"
+                                         f"\n{process.stderr.decode('utf-8')}\n"
+                                         f"The command's STDOUT was:\n{stdout}\n")
+        return stdout
 
     def __run_hbase_command(self, hbase_cmd):
         # In the Terminal, we usually put double quotes around everything after "-c", but doing that
@@ -172,6 +193,31 @@ class HBaseDockerClient:
             delete_cmd += f", {spec_map}"
         self.__run_hbase_command(delete_cmd)
 
+    def scan(self, table_name, spec_map=None):
+        log_msg = f"Scanning table '{table_name}' on {self.name}"
+        scan_cmd = f"scan '{table_name}'"
+        if spec_map:
+            scan_cmd += f", {spec_map}"
+            log_msg += f" with spec_map {spec_map}"
+        logging.info(log_msg)
+        return self.__run_hbase_command(scan_cmd)
+
+    def count(self, table_name, spec=None):
+        logger.info(f"Counting rows for table '{table_name}' on {self.name}")
+        count_cmd = f"count '{table_name}'"
+        if spec:
+            count_cmd += f"{spec}"
+        return self.__run_hbase_command(count_cmd)
+
+    def verify_table_row_count(self, table_name, expected_row_count):
+        logger.info(f"Verifying table '{table_name}' on {self.name} has {expected_row_count} row(s)")
+        output = self.count(table_name)
+        split_output = output.split('\n')
+        actual_row_count = split_output[1]
+        assert actual_row_count == f"{expected_row_count} row(s)" in output, \
+            (f"Expected table '{table_name}' on {self.name} to have {expected_row_count} row(s). "
+             f"Instead got {actual_row_count}")
+
     def flush(self, table_name):
         logger.debug(f"Flushing table '{table_name}'")
         self.__run_hbase_command(f"flush '{table_name}'")
@@ -184,31 +230,67 @@ class HBaseDockerClient:
         logger.debug(f"Refreshing HFiles on {self.name}")
         self.__run_hbase_command("refresh_hfiles")
 
-    @staticmethod
-    def verify_read_only_error_occurs(cluster, cmd_type, table_name, column,
-                                      row=None, value=None):
+    def update_all_config(self):
+        logger.debug(f"Running update_all_config on {self.name} to dynamically update the configuration")
+        self.__run_hbase_command("update_all_config")
+
+    def __set_read_only_mode_in_local_conf(self, value):
+        """Sets hbase.global.readonly.enabled to a new value in a local hbase-site.xml file"""
+        tree = ET.parse(self._local_conf)
+        root = tree.getroot()
+        for prop in root.findall('property'):
+            name_elem = prop.find('name')
+            if name_elem is not None and name_elem.text == 'hbase.global.readonly.enabled':
+                value_elem = prop.find('value')
+                if value_elem is not None:
+                    value_elem.text = str(value)
+                    break
+        tree.write(self._local_conf, encoding='utf-8', xml_declaration=True)
+
+    def enable_read_only_mode(self):
+        """
+        Sets hbase.global.readonly.enabled to 'true' in the local hbase-site.xml file and runs update_all_config
+        to dynamically update the configuration. This method assumes the hbase-site.xml file is a mounted volume
+        in the docker-compose file, which allows the config file within the docker container to be updated as well.
+        """
+        logger.info(f"Enabling read-only mode on {self.name}")
+        self.__set_read_only_mode_in_local_conf('true')
+        self.update_all_config()
+
+    def disable_read_only_mode(self):
+        """
+        Sets hbase.global.readonly.enabled to 'false' in the local hbase-site.xml file and runs update_all_config
+        to dynamically update the configuration. This method assumes the hbase-site.xml file is a mounted volume
+        in the docker-compose file, which allows the config file within the docker container to be updated as well.
+        """
+        logger.info(f"Disabling read-only mode on {self.name}")
+        self.__set_read_only_mode_in_local_conf('false')
+        self.update_all_config()
+
+    def verify_read_only_error_occurs(self, cmd_type, table_name, column,
+                                      row=None, data=None):
         """
         Runs a command on read-only cluster and expects an error to occur as a result.
         """
-        logger.info(f"Verifying we cannot perform a '{cmd_type}' on {cluster.name} "
+        logger.info(f"Verifying we cannot perform a '{cmd_type}' on {self.name} "
                     f"since it is in read-only mode")
         try:
             # This should throw an exception
             match cmd_type.lower():
                 case 'create':
-                    cluster.create_table(table_name, column)
+                    self.create_table(table_name, column)
                 case 'drop':
-                    cluster.drop_table(table_name)
+                    self.drop_table(table_name)
                 case 'put':
-                    cluster.put(table_name, column, row, value)
+                    self.put(table_name, column, row, data)
                 case 'delete':
-                    cluster.delete(table_name, row, column)
+                    self.delete(table_name, row, column)
                 case _:
                     raise RuntimeError(f"Unexpected command type: {cmd_type}")
 
             # If we get here, then the command succeeded on the read-replica cluster, which should
             # not have happened.
-            raise RuntimeError(f"Expected {cmd_type} attempt on {cluster.name} "
+            raise RuntimeError(f"Expected {cmd_type} attempt on {self.name} "
                                f"to result in an error")
         except HBaseShellCommandError as e:
             # Verify the command we ran on the read-replica cluster produced the expected exception
@@ -217,7 +299,7 @@ class HBaseDockerClient:
             assert expected_error in str(e), (f"Expected exception to contain the following: "
                                               f"{expected_error}\n"
                                               f"The actual exception was:\n{e}")
-        logger.info(f"{cmd_type.capitalize()} attempt on {cluster.name} failed as expected")
+        logger.info(f"{cmd_type.capitalize()} attempt on {self.name} failed as expected")
 
     @staticmethod
     def clean_up_tables(active_cluster, replica_cluster):
