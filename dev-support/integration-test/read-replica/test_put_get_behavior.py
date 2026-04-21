@@ -44,13 +44,11 @@ def test_put_delete_behavior(active_cluster, replica_cluster, table_name, column
 
     # Verify data cannot be added to the table on the read-replica cluster
     logger.info(f"Verifying data cannot be added to '{table_name}' on {replica_cluster.name}")
-    HBaseDockerClient.verify_read_only_error_occurs(replica_cluster, 'put', table_name,
-                                                    column, 'row2', 'value2')
+    replica_cluster.verify_read_only_error_occurs('put', table_name, column, 'row2', 'value2')
 
     # Verify data cannot be deleted from the table on the read-replica cluster
     logger.info(f"Verifying data cannot be deleted from '{table_name}' on {replica_cluster.name}")
-    HBaseDockerClient.verify_read_only_error_occurs(replica_cluster, 'delete', table_name,
-                                                    column, 'row2')
+    replica_cluster.verify_read_only_error_occurs('delete', table_name, column, 'row2')
 
     # Delete data from the active cluster
     logger.info(f"Deleting row from '{table_name}' on {active_cluster.name} "
