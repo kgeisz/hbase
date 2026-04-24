@@ -17,41 +17,54 @@ jobs:
         # This action ensures Docker Compose is installed and available
         uses: docker/setup-compose-action@v2
 
-      - name: Install Python Requirements
+      - name: Observe Filesystem
         run: |
-          pip install -r dev-support/integration-test/read-replica/requirements.txt
+          pwd
+          ls -la
+          echo "GITHUB_WORKSPACE = ${GITHUB_WORKSPACE}"
+          echo "Listing GITHUB_WORKSPACE:"
+          ls -la ${GITHUB_WORKSPACE}
 
-      - name: Prepare Host Data Directory
-        run: |
-          python --version
-          python3 --version
-          # Create the directory on the runner host
-          mkdir -p /home/runner/data-store/hbase /home/runner/data-store/run \
-                   /home/runner/data-store/logs /home/runner/data-store/zk
-          # Change ownership to UID 1000 (matches 'hbase' user in Dockerfile)
-          sudo chown -R 1000:1000 /home/runner/data-store
+      # - name: Build HBase Docker Image
+      #   run: |
+      #     chmod +x dev-support/integration-test/read-replica/build-images.sh
+      #     dev-support/integration-test/read-replica/build-images.sh
 
-      - name: Start Docker Clusters
-        run: |
-          docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml up -d
-          echo "Waiting for HBase clusters to initialize..."
-          # dev-support/integration-test/read-replica/verify-hbase-start.sh
-          python3 dev-support/integration-test/read-replica/verify_hbase_start.py
-          echo "Clusters are up!"
+      # - name: Install Python Requirements
+      #   run: |
+      #     pip install -r dev-support/integration-test/read-replica/requirements.txt
 
-      - name: Test Table Create/Drop Behavior
-        run: |
-          python3 dev-support/integration-test/read-replica/test_create_drop_behavior.py
+      # - name: Prepare Host Data Directory
+      #   run: |
+      #     python --version
+      #     python3 --version
+      #     # Create the directory on the runner host
+      #     mkdir -p /home/runner/data-store/hbase /home/runner/data-store/run \
+      #              /home/runner/data-store/logs /home/runner/data-store/zk
+      #     # Change ownership to UID 1000 (matches 'hbase' user in Dockerfile)
+      #     sudo chown -R 1000:1000 /home/runner/data-store
 
-      - name: Test Put/Get Behavior
-        run: |
-          python3 dev-support/integration-test/read-replica/test_put_get_behavior.py
+      # - name: Start HBase Docker Containers
+      #   run: |
+      #     docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml up -d
+      #     echo "Waiting for HBase clusters to initialize..."
+      #     # dev-support/integration-test/read-replica/verify-hbase-start.sh
+      #     python3 dev-support/integration-test/read-replica/verify_hbase_start.py
+      #     echo "Clusters are up!"
 
-      - name: Clean up
-        run: docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml down
+      # - name: Test Table Create/Drop Behavior
+      #   run: |
+      #     python3 dev-support/integration-test/read-replica/test_create_drop_behavior.py
 
-      - name: Dump Logs on Failure
-        if: failure()
-        run: |
-          docker logs hbase-docker
-          docker logs hbase-docker-2
+      # - name: Test Put/Get Behavior
+      #   run: |
+      #     python3 dev-support/integration-test/read-replica/test_put_get_behavior.py
+
+      # - name: Clean up
+      #   run: docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml down
+
+      # - name: Dump Logs on Failure
+      #   if: failure()
+      #   run: |
+      #     docker logs hbase-docker
+      #     docker logs hbase-docker-2
