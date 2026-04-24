@@ -17,18 +17,19 @@ jobs:
         # This action ensures Docker Compose is installed and available
         uses: docker/setup-compose-action@v2
 
-      - name: Observe Filesystem
-        run: |
-          pwd
-          ls -la
-          echo "GITHUB_WORKSPACE = ${GITHUB_WORKSPACE}"
-          echo "Listing GITHUB_WORKSPACE:"
-          ls -la ${GITHUB_WORKSPACE}
+      - name: Checkout HBASE-29081 Read-Replica Feature Branch
+        uses: actions/checkout@v4
+        with: 
+          ref: HBASE-29081
 
-      # - name: Build HBase Docker Image
-      #   run: |
-      #     chmod +x dev-support/integration-test/read-replica/build-images.sh
-      #     dev-support/integration-test/read-replica/build-images.sh
+      - name: Build HBase Docker Image
+        run: |
+          echo "Listing docker images before build:"
+          docker images
+          chmod +x dev-support/integration-test/read-replica/build-images.sh
+          dev-support/integration-test/read-replica/build-images.sh
+          echo "Listing docker images after build:"
+          docker images
 
       # - name: Install Python Requirements
       #   run: |
