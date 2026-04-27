@@ -22,14 +22,12 @@ jobs:
         with: 
           ref: HBASE-29081
 
-      - name: Build HBase Docker Image
+      - name: Explore Filesystem
         run: |
-          echo "Listing docker images before build:"
-          docker images
-          chmod +x dev-support/integration-test/read-replica/build-images.sh
-          dev-support/integration-test/read-replica/build-images.sh
-          echo "Listing docker images after build:"
-          docker images
+          echo "Listing '.'"
+          ls -la .
+          echo "Listing GITHUB_WORKSPACE = ${GITHUB_WORKSPACE}"
+          ls -la ${GITHUB_WORKSPACE}
 
       # - name: Install Python Requirements
       #   run: |
