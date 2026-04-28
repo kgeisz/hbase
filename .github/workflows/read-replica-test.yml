@@ -40,7 +40,7 @@ jobs:
         uses: actions/checkout@v4
         with: 
           ref: HBASE-29081
-          path: dev-support/integration-test/read-replica
+          path: dev-support/integration-test/read-replica/hbase
 
       - name: Explore Filesystem After Checkout
         run: |
