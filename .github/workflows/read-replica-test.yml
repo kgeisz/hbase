@@ -102,6 +102,12 @@ jobs:
           export PYTHONPATH="$(pwd)"
           python3 python/scripts/test_put_get_behavior.py
 
+      - name: Test Read-Only Flag Flipping
+        run: |
+          cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
+          export PYTHONPATH="$(pwd)"
+          python3 python/scripts/test_read_only_flag_flipping.py
+
       - name: Clean up
         run: docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml down
 
