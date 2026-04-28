@@ -67,10 +67,7 @@ jobs:
       - name: Install Python Requirements
         run: |
           cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
-          echo "Current directory: $(pwd)"
           pip install -r requirements.txt
-          export PYTHONPATH="$(pwd)"
-          echo "PYTHONPATH = ${PYTHONPATH}"
 
       # - name: Prepare Host Data Directory
       #   run: |
@@ -85,6 +82,7 @@ jobs:
       - name: Start HBase Docker Containers
         run: |
           cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
+          export PYTHONPATH="$(pwd)"
           echo "PYTHONPATH = ${PYTHONPATH}"
           # docker compose -f docker-compose.test.yml up -d
           echo "RUNNER_TEMP = ${RUNNER_TEMP}"
