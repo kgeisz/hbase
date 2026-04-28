@@ -7,7 +7,7 @@ import time
 import xml.etree.ElementTree as ET
 import requests
 
-from logger_config import get_logger
+from .logger_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -21,14 +21,14 @@ class HBaseShellCommandError(Exception):
 
 
 class HBaseDockerClient:
-    def __init__(self, container_name, hbase_ui_port=16010, cluster_name="HBase Cluster",
-                 max_retries=12, sleep_time=5, local_conf='conf/hbase-site.xml'):
+    def __init__(self, container_name, local_conf, hbase_ui_port=16010, cluster_name="HBase Cluster",
+                 max_retries=12, sleep_time=5):
         self._container_name = container_name
+        self._local_conf = local_conf
         self._hbase_ui_port = hbase_ui_port
         self._cluster_name = cluster_name
         self._max_retries = max_retries
         self._sleep_time = sleep_time
-        self._local_conf = local_conf
 
     @property
     def name(self):
@@ -313,6 +313,7 @@ class HBaseDockerClient:
             for table in tables:
                 active_cluster.disable_table(table)
                 active_cluster.drop_table(table)
-            logger.info(f"Running 'refresh_meta' on {replica_cluster.name} to sync it with "
-                        f"the {active_cluster.name}")
+            logger.info(f"Running 'refresh_meta' and 'refresh_hfiles' on {replica_cluster.name} to sync it with "
+                        f"{active_cluster.name}")
             replica_cluster.refresh_meta()
+            replica_cluster.refresh_hfiles()
