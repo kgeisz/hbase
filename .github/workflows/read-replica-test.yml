@@ -62,7 +62,7 @@ jobs:
           echo "Building docker image"
           ./build-images.sh
           echo "Listing Docker images"
-          docker images ls
+          docker image ls
 
       # - name: Install Python Requirements
       #   run: |
