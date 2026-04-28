@@ -103,12 +103,7 @@ jobs:
           python3 python/scripts/test_put_get_behavior.py
 
       - name: Clean up
-        run: |
-          echo "Getting current durectory"
-          pwd
-          echo "Changing to here just in case: ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica"
-          cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
-          docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml down
+        run: docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml down
 
       - name: Dump Logs on Failure
         if: failure()
