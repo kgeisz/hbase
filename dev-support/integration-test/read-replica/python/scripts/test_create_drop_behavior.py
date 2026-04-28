@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 from dotenv import load_dotenv
-from environment_loader import get_env
-from hbase_docker_client import HBaseDockerClient, HBaseShellCommandError
-from logger_config import get_logger
+from python.src.environment_loader import get_env
+from python.src.hbase_docker_client import HBaseDockerClient, HBaseShellCommandError
+from python.src.logger_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -103,9 +103,11 @@ if __name__ == "__main__":
     column_family = "cf"
 
     active_cluster = HBaseDockerClient(container_name=container_name,
+                                       local_conf=get_env('ACTIVE_CLUSTER_CONF'),
                                        hbase_ui_port=get_env('ACTIVE_CLUSTER_PORT'),
                                        cluster_name="Active Cluster")
     replica_cluster = HBaseDockerClient(container_name=f"{container_name}-2",
+                                        local_conf=get_env('REPLICA_CLUSTER_CONF'),
                                         hbase_ui_port=get_env('REPLICA_CLUSTER_PORT'),
                                         cluster_name="Read-Replica Cluster")
     try:
