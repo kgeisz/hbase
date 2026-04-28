@@ -69,15 +69,13 @@ jobs:
           cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
           pip install -r requirements.txt
 
-      # - name: Prepare Host Data Directory
-      #   run: |
-      #     python --version
-      #     python3 --version
-      #     # Create the directory on the runner host
-      #     mkdir -p /home/runner/data-store/hbase /home/runner/data-store/run \
-      #              /home/runner/data-store/logs /home/runner/data-store/zk
-      #     # Change ownership to UID 1000 (matches 'hbase' user in Dockerfile)
-      #     sudo chown -R 1000:1000 /home/runner/data-store
+      - name: Prepare Host Data Directory
+        run: |
+          # Create the data-store directory at /home/runner/work/_temp
+          mkdir -p ${RUNNER_TEMP}/data-store/hbase ${RUNNER_TEMP}/data-store/run \
+                   ${RUNNER_TEMP}/data-store/logs ${RUNNER_TEMP}/data-store/zk
+          # Change ownership to UID 1000 (matches 'hbase' user in Dockerfile)
+          sudo chown -R 1000:1000 ${RUNNER_TEMP}/data-store
 
       - name: Start HBase Docker Containers
         run: |
