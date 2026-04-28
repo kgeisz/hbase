@@ -10,30 +10,23 @@ jobs:
   integration-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout hbase-docker-client repository
-        uses: actions/checkout@v4
-        with:
-          repository: kgeisz/hbase-docker-client
-
-      - name: Checkout HBase Repository
-        uses: actions/checkout@v4
-        with:
-          path: hbase
+      # - name: Checkout HBase Repository
+      #   uses: actions/checkout@v4
 
       # - name: Set up Docker Compose
       #   # This action ensures Docker Compose is installed and available
       #   uses: docker/setup-compose-action@v2
 
-      # - name: Checkout HBASE-29081 Read-Replica Feature Branch
-      #   uses: actions/checkout@v4
-      #   with: 
-      #     ref: HBASE-29081
+      - name: Checkout HBASE-29081 Read-Replica Feature Branch
+        uses: actions/checkout@v4
+        with: 
+          ref: HBASE-29081
 
       - name: Explore Filesystem
         run: |
           echo "Current directory:"
           pwd
-          echo "Listing '.'"
+          echo "Listing current directory: ls -la ."
           ls -la .
           echo "Listing GITHUB_WORKSPACE = ${GITHUB_WORKSPACE}"
           ls -la ${GITHUB_WORKSPACE}
@@ -47,6 +40,14 @@ jobs:
           ls -la /home/runner/work/hbase
           echo "Listing /home/runner/work/hbase/hbase"
           ls -la /home/runner/work/hbase/hbase
+          echo "Listing /home/runner/work/hbase/${READ_REPLICA_DIR}"
+          ls -la /home/runner/work/hbase/${READ_REPLICA_DIR}
+          echo "Listing /home/runner/work/hbase/hbase/${READ_REPLICA_DIR}"
+          ls -la /home/runner/work/hbase/hbase/${READ_REPLICA_DIR}
+          echo "Running cd /home/runner/work/hbase/hbase"
+          cd /home/runner/work/hbase/hbase
+          echo "Running git log | head -n 20"
+          git log | head -n 20
 
       # - name: Install Python Requirements
       #   run: |
