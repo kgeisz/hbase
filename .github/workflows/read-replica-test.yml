@@ -13,10 +13,6 @@ jobs:
       - name: Checkout HBase Repository
         uses: actions/checkout@v4
 
-      # - name: Set up Docker Compose
-      #   # This action ensures Docker Compose is installed and available
-      #   uses: docker/setup-compose-action@v2
-
       - name: Explore Filesystem Before Checkout
         run: |
           echo "Current directory:"
@@ -51,22 +47,30 @@ jobs:
           echo "Running git log | head -n 20"
           git log | head -n 20
 
-      - name: Build Docker Image
-        run: |
-          echo "Changing to directory: ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica"
-          cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
-          echo "Current directory:"
-          pwd
-          echo "Listing current directory"
-          ls -la .
-          echo "Building docker image"
-          ./build-images.sh
-          echo "Listing Docker images"
-          docker image ls
+      - name: Set up Docker Compose
+        # This action ensures Docker Compose is installed and available
+        uses: docker/setup-compose-action@v2
 
-      # - name: Install Python Requirements
+      # - name: Build Docker Image
       #   run: |
-      #     pip install -r dev-support/integration-test/read-replica/requirements.txt
+      #     echo "Changing to directory: ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica"
+      #     cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
+      #     echo "Current directory:"
+      #     pwd
+      #     echo "Listing current directory"
+      #     ls -la .
+      #     echo "Building docker image"
+      #     ./build-images.sh
+      #     echo "Listing Docker images"
+      #     docker image ls
+
+      - name: Install Python Requirements
+        run: |
+          cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
+          echo "Current directory: $(pwd)"
+          pip install -r requirements.txt
+          export PYTHONPATH="$(pwd)"
+          echo "PYTHONPATH = ${PYTHONPATH}"
 
       # - name: Prepare Host Data Directory
       #   run: |
