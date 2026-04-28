@@ -17,12 +17,31 @@ jobs:
       #   # This action ensures Docker Compose is installed and available
       #   uses: docker/setup-compose-action@v2
 
+      - name: Explore Filesystem Before Checkout
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "Listing current directory: ls -la ."
+          ls -la .
+          echo "Listing GITHUB_WORKSPACE = ${GITHUB_WORKSPACE}"
+          ls -la ${GITHUB_WORKSPACE}
+          echo "Listing /home"
+          ls -la /home
+          echo "Listing /home/runner"
+          ls -la /home/runner
+          echo "Listing /home/runner/work"
+          ls -la /home/runner/work/
+          echo "Listing /home/runner/work/hbase"
+          ls -la /home/runner/work/hbase
+          echo "Listing /home/runner/work/hbase/hbase"
+          ls -la /home/runner/work/hbase/hbase
+
       - name: Checkout HBASE-29081 Read-Replica Feature Branch
         uses: actions/checkout@v4
         with: 
           ref: HBASE-29081
 
-      - name: Explore Filesystem
+      - name: Explore Filesystem After Checkout
         run: |
           echo "Current directory:"
           pwd
