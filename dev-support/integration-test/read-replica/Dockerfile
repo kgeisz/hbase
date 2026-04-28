@@ -8,7 +8,7 @@ USER root
 RUN INITRD=no DEBIAN_FRONTEND=noninteractive microdnf update -y && microdnf install -y maven git hostname diffutils
 
 # Copy the entire source code to cache dependencies
-COPY ${GITHUB_WORKSPACE} /opt/hbase-src
+COPY ./hbase /opt/hbase-src
 
 WORKDIR /opt/hbase-src
 
@@ -27,7 +27,7 @@ RUN INITRD=no DEBIAN_FRONTEND=noninteractive microdnf update -y && microdnf inst
 COPY --from=cache-stage /root/.m2 /root/.m2
 
 # Copy the HBase source code
-COPY ${GITHUB_WORKSPACE} /opt/hbase-src
+COPY ./hbase /opt/hbase-src
 
 WORKDIR /opt/hbase-src
 
