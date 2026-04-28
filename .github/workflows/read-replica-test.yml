@@ -53,8 +53,8 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          echo "Changing to directory: ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica/hbase"
-          cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica/hbase
+          echo "Changing to directory: ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica"
+          cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
           echo "Current directory:"
           pwd
           echo "Listing current directory"
