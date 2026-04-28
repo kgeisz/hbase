@@ -10,8 +10,8 @@ jobs:
   integration-test:
     runs-on: ubuntu-latest
     steps:
-      # - name: Checkout HBase Repository
-      #   uses: actions/checkout@v4
+      - name: Checkout HBase Repository
+        uses: actions/checkout@v4
 
       # - name: Set up Docker Compose
       #   # This action ensures Docker Compose is installed and available
@@ -40,9 +40,12 @@ jobs:
         uses: actions/checkout@v4
         with: 
           ref: HBASE-29081
+          path: ${READ_REPLICA_DEV}
 
       - name: Explore Filesystem After Checkout
         run: |
+          echo "Running: ls -la ${READ_REPLICA_DEV}"
+          ls -la ${READ_REPLICA_DEV}
           echo "Current directory:"
           pwd
           echo "Listing current directory: ls -la ."
