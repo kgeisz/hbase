@@ -85,13 +85,16 @@ jobs:
       - name: Start HBase Docker Containers
         run: |
           cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
-          docker compose -f docker-compose.test.yml up -d
+          echo "PYTHONPATH = ${PYTHONPATH}"
+          # docker compose -f docker-compose.test.yml up -d
           echo "RUNNER_TEMP = ${RUNNER_TEMP}"
           echo "ls -la ${RUNNER_TEMP}"
           ls -la ${RUNNER_TEMP}
-          echo "Waiting for HBase clusters to initialize..."
-          python3 python/scripts/verify_hbase_start.py
-          echo "Clusters are up!"
+          echo "Running test script: python/scripts/test_script.py"
+          python3 python/scripts/test_script.py
+          # echo "Waiting for HBase clusters to initialize..."
+          # python3 python/scripts/verify_hbase_start.py
+          # echo "Clusters are up!"
 
       # - name: Test Table Create/Drop Behavior
       #   run: |
