@@ -1,10 +1,10 @@
 name: Docker Image CI
 
 on:
-  push:
-    branches: [ "docker-github-action-testing" ]
+  # push:
+  #   branches: [ "docker-github-action-testing" ]
   pull_request:
-    branches: [ "docker-github-action-testing" ]
+    branches: [ "docker-github-action-testing", "HBASE-29081" ]
 
 jobs:
   integration-test:
@@ -35,7 +35,8 @@ jobs:
       - name: Checkout HBASE-29081 Read-Replica Feature Branch
         uses: actions/checkout@v4
         with: 
-          ref: HBASE-29081
+          # If it's a PR, then use the PR's head SHA. Otherwise, use HBASE-29081.
+          ref: ${{ github.event.pull_request.head.sha || 'HBASE-29081' }}
           path: dev-support/integration-test/read-replica/hbase
 
       - name: Explore Filesystem After Checkout
