@@ -15,7 +15,7 @@ def test_table_creation_behavior(active_cluster, replica_cluster, table_name, co
     tables cannot be created/dropped on the replica cluster.
     """
     # We should not be able to create a new table on the read-replica cluster
-    replica_cluster.verify_read_only_error_occurs('create', table_name, column_family)
+    replica_cluster.assert_read_only_error_occurs('create', table_name, column_family)
 
     active_cluster.create_table(table_name, column_family)
 
@@ -33,7 +33,7 @@ def test_table_creation_behavior(active_cluster, replica_cluster, table_name, co
 
     # Cannot drop the table on the Read-Replica cluster. A DoNotRetryIOException should occur
     replica_cluster.disable_table(table_name)
-    replica_cluster.verify_read_only_error_occurs('drop', table_name, column_family)
+    replica_cluster.assert_read_only_error_occurs('drop', table_name, column_family)
     # The table should still exist on the read-replica cluster since drops are not allowed
     replica_cluster.assert_table_exists(table_name)
 
@@ -90,11 +90,11 @@ if __name__ == "__main__":
     column_family = "cf"
 
     active_cluster = HBaseDockerClient(container_name=container_name,
-                                       local_conf=get_env('ACTIVE_CLUSTER_CONF'),
+                                       local_conf=f"{get_env('ACTIVE_CLUSTER_CONF_DIR')}/hbase-site.xml",
                                        hbase_ui_port=get_env('ACTIVE_CLUSTER_PORT'),
                                        cluster_name="Active Cluster")
     replica_cluster = HBaseDockerClient(container_name=f"{container_name}-2",
-                                        local_conf=get_env('REPLICA_CLUSTER_CONF'),
+                                        local_conf=f"{get_env('REPLICA_CLUSTER_CONF_DIR')}/hbase-site.xml",
                                         hbase_ui_port=get_env('REPLICA_CLUSTER_PORT'),
                                         cluster_name="Read-Replica Cluster")
     try:
