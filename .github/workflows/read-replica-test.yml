@@ -1,8 +1,8 @@
 name: Docker Image CI
 
 on:
-  # push:
-  #   branches: [ "docker-github-action-testing" ]
+  push:
+    branches: [ "docker-github-action-testing" ]
   pull_request:
     branches: [ "docker-github-action-testing" ]
 
@@ -69,6 +69,17 @@ jobs:
         run: |
           cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
           pip install -r requirements.txt
+
+      - name: Compile Protobuf
+        run: |
+          cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
+          export PYTHONPATH="$(pwd)"
+          python3 python/proto/proto_compiler.py
+          echo "Listing dir after compiling protobuf"
+          echo "Running: ls -l python/proto/"
+          ls -l python/proto/
+          echo "Running: ls -l python/proto/generated"
+          ls -l python/proto/generated
 
       - name: Prepare Host Data Directory
         run: |
