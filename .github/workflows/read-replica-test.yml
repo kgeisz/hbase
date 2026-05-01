@@ -33,6 +33,7 @@ jobs:
       - name: Install Python Requirements
         run: |
           echo "Current dir: $(pwd)"
+          echo "github.workspace = ${{ github.workspace }}"
           echo "Current dir contents:"
           ls -la
           echo "Listing GITHUB_WORKSPACE = ${GITHUB_WORKSPACE}"
