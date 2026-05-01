@@ -9,7 +9,7 @@ on:
 jobs:
   integration-test:
     env:
-      WORK_DIR: ./dev-support/integration-test/read-replica
+      REPLICA_BASE_DIR: ./dev-support/integration-test/read-replica
     defaults:
       run:
         working-directory: ${{ env.REPLICA_BASE_DIR }}
@@ -38,13 +38,13 @@ jobs:
           echo "Listing GITHUB_WORKSPACE = ${GITHUB_WORKSPACE}"
           ls -la ${GITHUB_WORKSPACE}
           pip install -r requirements.txt
-        # working-directory: ${{ env.WORK_DIR }}
+        # working-directory: ${{ env.REPLICA_BASE_DIR }}
 
       - name: Set Python Path
         run: |
           echo "Current dir: $(pwd)"
           echo "PYTHONPATH=$(pwd)" >> ${GITHUB_ENV}
-        # working-directory: ${{ env.WORK_DIR }}
+        # working-directory: ${{ env.REPLICA_BASE_DIR }}
 
       - name: Compile Protobuf
         run: |
@@ -53,7 +53,7 @@ jobs:
           cp hbase/hbase-protocol-shaded/src/main/protobuf/server/ActiveClusterSuffix.proto \
              python/proto
           python3 python/proto/proto_compiler.py
-        # working-directory: ${{ env.WORK_DIR }}
+        # working-directory: ${{ env.REPLICA_BASE_DIR }}
 
       - name: Prepare Host Data Directory
         run: |
@@ -69,7 +69,7 @@ jobs:
       #     ./build-images.sh
       #     echo "Listing Docker images"
       #     docker image ls
-      #   # working-directory: ${{ env.WORK_DIR }}
+      #   # working-directory: ${{ env.REPLICA_BASE_DIR }}
 
       # - name: Start HBase Docker Containers
       #   run: |
@@ -78,23 +78,23 @@ jobs:
       #     echo "Waiting for HBase clusters to initialize..."
       #     python3 python/scripts/verify_hbase_start.py
       #     echo "Clusters are up!"
-      #   # working-directory: ${{ env.WORK_DIR }}
+      #   # working-directory: ${{ env.REPLICA_BASE_DIR }}
 
       # - name: Test Table Create/Drop Behavior
       #   run: python3 python/scripts/test_create_drop_behavior.py
-      #   # working-directory: ${{ env.WORK_DIR }}
+      #   # working-directory: ${{ env.REPLICA_BASE_DIR }}
 
       # - name: Test Put/Get Behavior
       #   run: python3 python/scripts/test_put_get_behavior.py
-      #   # working-directory: ${{ env.WORK_DIR }}
+      #   # working-directory: ${{ env.REPLICA_BASE_DIR }}
 
       # - name: Test Read-Only Flag Flipping
       #   run: python3 python/scripts/test_read_only_flag_flipping.py
-      #   # working-directory: ${{ env.WORK_DIR }}
+      #   # working-directory: ${{ env.REPLICA_BASE_DIR }}
 
       # - name: Clean up
       #   run: docker compose -f docker-compose.test.yml down
-      #   # working-directory: ${{ env.WORK_DIR }}
+      #   # working-directory: ${{ env.REPLICA_BASE_DIR }}
 
       # - name: Dump Logs on Failure
       #   if: failure()
