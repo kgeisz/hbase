@@ -4,7 +4,6 @@
 services:
   hbase:
     image: ${HBASE_IMAGE}
-    platform: linux/arm64
     container_name: ${HBASE_CONTAINER_NAME}
     hostname: ${HBASE_CONTAINER_NAME}
     ports:
@@ -18,7 +17,6 @@ services:
 
   hbase2:
     image: ${HBASE_IMAGE}
-    platform: linux/arm64
     container_name: ${HBASE_CONTAINER_NAME}-2
     hostname: ${HBASE_CONTAINER_NAME}-2
     ports:
