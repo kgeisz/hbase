@@ -28,7 +28,9 @@ jobs:
         uses: docker/setup-compose-action@v2
 
       - name: Install Python Requirements
-        run: pip install -r requirements.txt
+        run: |
+          echo "Current dir: $(pwd)"
+          pip install -r requirements.txt
         working-directory: ${WORK_DIR}
 
       - name: Set Python Path
