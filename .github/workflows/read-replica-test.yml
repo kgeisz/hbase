@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ "docker-github-action-testing" ]
 
+env:
+  WORK_DIR: ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
+
 jobs:
   integration-test:
     runs-on: ubuntu-latest
@@ -13,73 +16,32 @@ jobs:
       - name: Checkout HBase Repository
         uses: actions/checkout@v4
 
-      - name: Explore Filesystem Before Checkout
-        run: |
-          echo "Current directory:"
-          pwd
-          echo "Listing current directory: ls -la ."
-          ls -la .
-          echo "Listing GITHUB_WORKSPACE = ${GITHUB_WORKSPACE}"
-          ls -la ${GITHUB_WORKSPACE}
-          echo "Listing /home"
-          ls -la /home
-          echo "Listing /home/runner"
-          ls -la /home/runner
-          echo "Listing /home/runner/work"
-          ls -la /home/runner/work/
-          echo "Listing /home/runner/work/hbase"
-          ls -la /home/runner/work/hbase
-          echo "Listing /home/runner/work/hbase/hbase"
-          ls -la /home/runner/work/hbase/hbase
-
       - name: Checkout HBASE-29081 Read-Replica Feature Branch
         uses: actions/checkout@v4
         with: 
           # If it's a PR, then use the PR's head SHA. Otherwise, use HBASE-29081.
           ref: ${{ github.event.pull_request.head.sha || 'HBASE-29081' }}
-          path: dev-support/integration-test/read-replica/hbase
-
-      - name: Explore Filesystem After Checkout
-        run: |
-          echo "Running: ls -la dev-support/integration-test/read-replica"
-          ls -la dev-support/integration-test/read-replica
-          echo "Running cd dev-support/integration-test/read-replica/hbase"
-          cd /home/runner/work/hbase/hbase
-          echo "Running git log | head -n 20"
-          git log | head -n 20
+          path: ${WORK_DIR}/hbase
 
       - name: Set up Docker Compose
         # This action ensures Docker Compose is installed and available
         uses: docker/setup-compose-action@v2
 
-      - name: Build Docker Image
-        run: |
-          echo "Changing to directory: ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica"
-          cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
-          echo "Current directory:"
-          pwd
-          echo "Listing current directory"
-          ls -la .
-          echo "Building docker image"
-          ./build-images.sh
-          echo "Listing Docker images"
-          docker image ls
-
       - name: Install Python Requirements
-        run: |
-          cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
+        working-directory: ${WORK_DIR}
+
+      - name: Set Python Path
+        run: echo "PYTHONPATH=$(pwd)" >> ${GITHUB_ENV}
+        working-directory: ${WORK_DIR}
 
       - name: Compile Protobuf
         run: |
-          cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
-          export PYTHONPATH="$(pwd)"
+          echo "Copying ActiveClusterSuffix.proto from HBase repo to have latest version"
+          cp hbase/hbase-protocol-shaded/src/main/protobuf/server/ActiveClusterSuffix.proto \
+             python/proto
           python3 python/proto/proto_compiler.py
-          echo "Listing dir after compiling protobuf"
-          echo "Running: ls -l python/proto/"
-          ls -l python/proto/
-          echo "Running: ls -l python/proto/generated"
-          ls -l python/proto/generated
+        working-directory: ${WORK_DIR}
 
       - name: Prepare Host Data Directory
         run: |
@@ -89,39 +51,38 @@ jobs:
           # Change ownership to UID 1000 (matches 'hbase' user in Dockerfile)
           sudo chown -R 1000:1000 ${RUNNER_TEMP}/data-store
 
+      - name: Build Docker Image
+        run: |
+          echo "Building docker image"
+          ./build-images.sh
+          echo "Listing Docker images"
+          docker image ls
+        working-directory: ${WORK_DIR}
+
       - name: Start HBase Docker Containers
         run: |
-          cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
-          export PYTHONPATH="$(pwd)"
           echo "PYTHONPATH = ${PYTHONPATH}"
           docker compose -f docker-compose.test.yml up -d
-          echo "RUNNER_TEMP = ${RUNNER_TEMP}"
-          echo "ls -la ${RUNNER_TEMP}"
-          ls -la ${RUNNER_TEMP}
           echo "Waiting for HBase clusters to initialize..."
           python3 python/scripts/verify_hbase_start.py
           echo "Clusters are up!"
+        working-directory: ${WORK_DIR}
 
       - name: Test Table Create/Drop Behavior
-        run: |
-          cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
-          export PYTHONPATH="$(pwd)"
-          python3 python/scripts/test_create_drop_behavior.py
+        run: python3 python/scripts/test_create_drop_behavior.py
+        working-directory: ${WORK_DIR}
 
       - name: Test Put/Get Behavior
-        run: |
-          cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
-          export PYTHONPATH="$(pwd)"
-          python3 python/scripts/test_put_get_behavior.py
+        run: python3 python/scripts/test_put_get_behavior.py
+        working-directory: ${WORK_DIR}
 
       - name: Test Read-Only Flag Flipping
-        run: |
-          cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
-          export PYTHONPATH="$(pwd)"
-          python3 python/scripts/test_read_only_flag_flipping.py
+        run: python3 python/scripts/test_read_only_flag_flipping.py
+        working-directory: ${WORK_DIR}
 
       - name: Clean up
-        run: docker compose -f dev-support/integration-test/read-replica/docker-compose.test.yml down
+        run: docker compose -f docker-compose.test.yml down
+        working-directory: ${WORK_DIR}
 
       - name: Dump Logs on Failure
         if: failure()
