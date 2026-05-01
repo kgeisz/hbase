@@ -102,23 +102,6 @@ jobs:
           python3 python/scripts/verify_hbase_start.py
           echo "Clusters are up!"
 
-      - name: grep Log For Message Added in PR
-        run: |
-          echo "Checking hbase-docker log for this message: 'kevin test github action'"
-          docker logs hbase-docker | grep "kevin test github action"
-          if [ $? -eq 0 ]; then
-              echo "Success: Found message"
-          else
-              echo "Error: Did not find message"
-          fi
-          echo "Checking hbase-docker-2 log for this message: 'kevin test github action'"
-          docker logs hbase-docker-2 | grep "kevin test github action"
-          if [ $? -eq 0 ]; then
-              echo "Success: Found message"
-          else
-              echo "Error: Did not find message"
-          fi
-
       - name: Test Table Create/Drop Behavior
         run: |
           cd ${GITHUB_WORKSPACE}/dev-support/integration-test/read-replica
