@@ -6,14 +6,13 @@ on:
   pull_request:
     branches: [ "docker-github-action-testing" ]
 
-# env:
-#   WORK_DIR: ./dev-support/integration-test/read-replica
-
 jobs:
   integration-test:
+    env:
+      WORK_DIR: ./dev-support/integration-test/read-replica
     defaults:
       run:
-        working-directory: ./dev-support/integration-test/read-replica
+        working-directory: ${{ env.REPLICA_BASE_DIR }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout HBase Repository
@@ -24,7 +23,7 @@ jobs:
         with: 
           # If it's a PR, then use the PR's head SHA. Otherwise, use HBASE-29081.
           ref: ${{ github.event.pull_request.head.sha || 'HBASE-29081' }}
-          path: ./hbase
+          path: ${{ env.REPLICA_BASE_DIR }}/hbase
 
       - name: Set up Docker Compose
         # This action ensures Docker Compose is installed and available
