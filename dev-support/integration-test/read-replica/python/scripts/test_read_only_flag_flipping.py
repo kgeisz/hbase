@@ -121,7 +121,7 @@ if __name__ == '__main__':
                                  hbase_ui_port=get_env('REPLICA_CLUSTER_PORT'),
                                  cluster_name="Cluster 2")
 
-    iterations = 1
+    iterations = 5
     for i in range(1, iterations+1):
         logger.info(f"----- Iteration {i} -----")
         # Create table on active cluster
@@ -132,9 +132,18 @@ if __name__ == '__main__':
         create_table_and_test_active_and_replica_clusters(active_cluster=cluster1, replica_cluster=cluster2)
         flip_read_only_flag(new_active_cluster=cluster2, new_replica_cluster=cluster1)
         assert_correct_active_cluster_suffix(cluster2, data_store_root)
+
         create_table_and_test_active_and_replica_clusters(active_cluster=cluster2, replica_cluster=cluster1)
         flip_read_only_flag(new_active_cluster=cluster1, new_replica_cluster=cluster2)
         assert_correct_active_cluster_suffix(cluster1, data_store_root)
-        # This next line is commented out to prevent HBASE-30090
-        # create_table_and_test_active_and_replica_clusters(active_cluster=cluster1, replica_cluster=cluster2)
+
+        # If this line runs properly, then HBASE-30090 has been fixed
+        create_table_and_test_active_and_replica_clusters(active_cluster=cluster1, replica_cluster=cluster2)
+        flip_read_only_flag(new_active_cluster=cluster2, new_replica_cluster=cluster1)
+        assert_correct_active_cluster_suffix(cluster2, data_store_root)
+
+        create_table_and_test_active_and_replica_clusters(active_cluster=cluster2, replica_cluster=cluster1)
+        flip_read_only_flag(new_active_cluster=cluster1, new_replica_cluster=cluster2)
+        assert_correct_active_cluster_suffix(cluster1, data_store_root)
+
         logger.info(f"Finished iteration {i} of {iterations}")
