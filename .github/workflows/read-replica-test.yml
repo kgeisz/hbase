@@ -1,10 +1,10 @@
 name: Docker Image CI
 
 on:
-  # push:
-  #   branches: [ "docker-github-action-testing" ]
-  pull_request:
+  push:
     branches: [ "docker-github-action-testing" ]
+  # pull_request:
+  #   branches: [ "docker-github-action-testing" ]
 
 jobs:
   integration-test:
