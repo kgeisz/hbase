@@ -8989,7 +8989,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     this.storeHotnessProtector.update(newConf);
 
     boolean originalIsReadOnlyEnabled = CoprocessorConfigurationUtil
-      .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.REGION_COPROCESSOR_CONF_KEY);
+      .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, this.toString());
 
     CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, originalIsReadOnlyEnabled,
       this.coprocessorHost, CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, false, this.toString(),

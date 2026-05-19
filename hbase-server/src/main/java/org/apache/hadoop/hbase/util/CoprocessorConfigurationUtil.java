@@ -203,11 +203,16 @@ public final class CoprocessorConfigurationUtil {
    * @return true if the ReadOnlyCoprocessors are loaded in the configuration; false otherwise
    */
   public static boolean areReadOnlyCoprocessorsLoaded(Configuration conf,
-    String coprocessorConfKey) {
+    String coprocessorConfKey, String instance) {
+    LOG.info("kevin: {} {}: Checking if read-only coprocessors are loaded", instance, coprocessorConfKey);
     // Using a HashSet will improve performance when searching for read-only coprocessors
     HashSet<String> allCoprocessors =
       new HashSet<>(getCoprocessorsFromConfig(conf, coprocessorConfKey));
     List<String> readOnlyCoprocessors = getReadOnlyCoprocessors(coprocessorConfKey);
+    LOG.info("kevin: {} {}: allCoprocessors = {}", instance, coprocessorConfKey, allCoprocessors);
+    LOG.info("kevin: {} {}: readOnlyCoprocessors = {}", instance, coprocessorConfKey, readOnlyCoprocessors);
+    LOG.info("kevin: {} {}: allCoprocessors.containsAll(readOnlyCoprocessors) = {}",
+      instance, coprocessorConfKey, allCoprocessors.containsAll(readOnlyCoprocessors));
     return allCoprocessors.containsAll(readOnlyCoprocessors);
   }
 
@@ -273,6 +278,11 @@ public final class CoprocessorConfigurationUtil {
     boolean hasReadOnlyModeChanged = originalIsReadOnlyEnabled != maybeUpdatedReadOnlyMode;
     boolean hasCoprocessorConfigChanged = CoprocessorConfigurationUtil
       .checkConfigurationChange(coprocessorHost, newConf, coprocessorConfKey);
+
+    String componentName = getComponentName(coprocessorConfKey);
+    LOG.info("kevin: {} {}: maybeUpdatedReadOnlyMode = {}", componentName, instance, maybeUpdatedReadOnlyMode);
+    LOG.info("kevin: {} {}: hasReadOnlyModeChanged = {}", componentName, instance, hasReadOnlyModeChanged);
+    LOG.info("kevin: {} {}: hasCoprocessorConfigChanged = {}", componentName, instance, hasCoprocessorConfigChanged);
 
     // update region server coprocessor if the configuration has changed.
     if ((hasCoprocessorConfigChanged || hasReadOnlyModeChanged) && !isMaintenanceMode) {

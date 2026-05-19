@@ -4502,7 +4502,8 @@ public class HMaster extends HBaseServerBase<MasterRpcServices> implements Maste
     setQuotasObserver(newConf);
 
     boolean originalIsReadOnlyEnabled = CoprocessorConfigurationUtil
-      .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY);
+      .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, this.toString());
+    LOG.info("kevin: HMaster originalIsReadOnlyEnabled = {}", originalIsReadOnlyEnabled);
 
     CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, originalIsReadOnlyEnabled,
       this.cpHost, CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, this.maintenanceMode,
@@ -4513,7 +4514,7 @@ public class HMaster extends HBaseServerBase<MasterRpcServices> implements Maste
       });
 
     boolean maybeUpdatedReadOnlyMode = CoprocessorConfigurationUtil
-      .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY);
+      .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, this.toString());
 
     if (maybeUpdatedReadOnlyMode != originalIsReadOnlyEnabled) {
       AbstractReadOnlyController.manageActiveClusterIdFile(maybeUpdatedReadOnlyMode,
