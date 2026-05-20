@@ -8986,11 +8986,14 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    */
   @Override
   public void onConfigurationChange(Configuration newConf) {
+    LOG.info("kevin: HRegion {}: START onConfigurationChange()", this.toString());
     this.storeHotnessProtector.update(newConf);
 
     boolean originalIsReadOnlyEnabled = CoprocessorConfigurationUtil
       .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, this.toString());
+    LOG.info("kevin: HRegion {}: originalIsReadOnlyEnabled = {}", this.toString(), originalIsReadOnlyEnabled);
 
+    LOG.info("kevin: HRegion about to START maybeUpdateCoprocessors() for {}", this.toString());
     CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, originalIsReadOnlyEnabled,
       this.coprocessorHost, CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, false, this.toString(),
       conf -> {
@@ -8999,8 +9002,15 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         CoprocessorConfigurationUtil.updateCoprocessorListInConf(this.conf, conf,
           CoprocessorHost.REGION_COPROCESSOR_CONF_KEY);
       });
+    LOG.info("kevin: HRegion just ENDED maybeUpdateCoprocessors() for {}", this.toString());
 
     boolean newReadOnlyEnabled = ConfigurationUtil.isReadOnlyModeEnabledInConf(newConf);
+    LOG.info("kevin: HRegion {}: newReadOnlyEnabled = {}", this.toString(), newReadOnlyEnabled);
+
+    LOG.info("kevin: HRegion {}: just updated coprocessors and about to transition stores to active", this.toString());
+    boolean areReadOnlyCoprocessorsLoadedBeforeTransition = CoprocessorConfigurationUtil
+      .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, this.toString());
+    LOG.info("kevin: HRegion {}: areReadOnlyCoprocessorsLoadedBeforeTransition = {}", this.toString(), areReadOnlyCoprocessorsLoadedBeforeTransition);
 
     if (originalIsReadOnlyEnabled && !newReadOnlyEnabled) {
       LOG.info("Cluster Read Only mode disabled");
@@ -9008,6 +9018,13 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         store.getStoreEngine().getStoreFileTracker().onTransitionToActive();
       }
     }
+    LOG.info("kevin: HRegion {}: transition stores to active", this.toString());
+    boolean areReadOnlyCoprocessorsLoadedAfterTransition = CoprocessorConfigurationUtil
+      .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, this.toString());
+    LOG.info("kevin: HRegion {}: areReadOnlyCoprocessorsLoadedAfterTransition = {}", this.toString(), areReadOnlyCoprocessorsLoadedAfterTransition);
+    LOG.info("kevin: HRegion {}: areReadOnlyCoprocessorsLoadedBeforeTransition == areReadOnlyCoprocessorsLoadedAfterTransition: {}",
+      this.toString(), areReadOnlyCoprocessorsLoadedBeforeTransition == areReadOnlyCoprocessorsLoadedAfterTransition);
+    LOG.info("kevin: HRegion {}: END onConfigurationChange()", this.toString());
   }
 
   /**

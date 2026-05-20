@@ -204,15 +204,16 @@ public final class CoprocessorConfigurationUtil {
    */
   public static boolean areReadOnlyCoprocessorsLoaded(Configuration conf,
     String coprocessorConfKey, String instance) {
-    LOG.info("kevin: {} {}: Checking if read-only coprocessors are loaded", instance, coprocessorConfKey);
+    String componentName = getComponentName(coprocessorConfKey);
+    LOG.info("kevin: {} {}: Checking if read-only coprocessors are loaded", componentName, instance);
     // Using a HashSet will improve performance when searching for read-only coprocessors
     HashSet<String> allCoprocessors =
       new HashSet<>(getCoprocessorsFromConfig(conf, coprocessorConfKey));
     List<String> readOnlyCoprocessors = getReadOnlyCoprocessors(coprocessorConfKey);
-    LOG.info("kevin: {} {}: allCoprocessors = {}", instance, coprocessorConfKey, allCoprocessors);
-    LOG.info("kevin: {} {}: readOnlyCoprocessors = {}", instance, coprocessorConfKey, readOnlyCoprocessors);
-    LOG.info("kevin: {} {}: allCoprocessors.containsAll(readOnlyCoprocessors) = {}",
-      instance, coprocessorConfKey, allCoprocessors.containsAll(readOnlyCoprocessors));
+    LOG.info("kevin: {} {}: allCoprocessors = {}", componentName, instance, allCoprocessors);
+    LOG.info("kevin: {} {}: readOnlyCoprocessors = {}", componentName, instance, readOnlyCoprocessors);
+    LOG.info("kevin: {} {}: are read-only coprocessors currently loaded? = {}",
+      componentName, instance, allCoprocessors.containsAll(readOnlyCoprocessors));
     return allCoprocessors.containsAll(readOnlyCoprocessors);
   }
 

@@ -3479,6 +3479,7 @@ public class HRegionServer extends HBaseServerBase<RSRpcServices>
 
   @Override
   public void onConfigurationChange(Configuration newConf) {
+    LOG.info("kevin: HRegionServer {}: START onConfigurationChange()", this.toString());
     ThroughputController old = this.flushThroughputController;
     if (old != null) {
       old.stop("configuration change");
@@ -3492,7 +3493,9 @@ public class HRegionServer extends HBaseServerBase<RSRpcServices>
 
     boolean originalIsReadOnlyEnabled = CoprocessorConfigurationUtil
       .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY, this.toString());
+    LOG.info("kevin: HRegionServer {}: originalIsReadOnlyEnabled = {}", this.toString(), originalIsReadOnlyEnabled);
 
+    LOG.info("kevin: HRegionServer about to START maybeUpdateCoprocessors()");
     CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, originalIsReadOnlyEnabled,
       this.rsHost, CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY, false, this.toString(),
       conf -> {
@@ -3500,6 +3503,8 @@ public class HRegionServer extends HBaseServerBase<RSRpcServices>
         CoprocessorConfigurationUtil.updateCoprocessorListInConf(this.conf, conf,
           CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY);
       });
+    LOG.info("kevin: HRegionServer just ENDED maybeUpdateCoprocessors()");
+    LOG.info("kevin: HRegionServer {}: END onConfigurationChange()", this.toString());
   }
 
   @Override

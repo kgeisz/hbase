@@ -4493,6 +4493,7 @@ public class HMaster extends HBaseServerBase<MasterRpcServices> implements Maste
 
   @Override
   public void onConfigurationChange(Configuration newConf) {
+    LOG.info("kevin: HMaster START onConfigurationChange()");
     try {
       Superusers.initialize(newConf);
     } catch (IOException e) {
@@ -4503,8 +4504,9 @@ public class HMaster extends HBaseServerBase<MasterRpcServices> implements Maste
 
     boolean originalIsReadOnlyEnabled = CoprocessorConfigurationUtil
       .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, this.toString());
-    LOG.info("kevin: HMaster originalIsReadOnlyEnabled = {}", originalIsReadOnlyEnabled);
+    LOG.info("kevin: HMaster {}: originalIsReadOnlyEnabled = {}", this.toString(), originalIsReadOnlyEnabled);
 
+    LOG.info("kevin: HMaster about to START maybeUpdateCoprocessors()");
     CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, originalIsReadOnlyEnabled,
       this.cpHost, CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, this.maintenanceMode,
       this.toString(), conf -> {
@@ -4512,14 +4514,17 @@ public class HMaster extends HBaseServerBase<MasterRpcServices> implements Maste
         CoprocessorConfigurationUtil.updateCoprocessorListInConf(this.conf, conf,
           CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY);
       });
+    LOG.info("kevin: HMaster just ENDED maybeUpdateCoprocessors()");
 
     boolean maybeUpdatedReadOnlyMode = CoprocessorConfigurationUtil
       .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, this.toString());
+    LOG.info("kevin: HMaster {}: maybeUpdatedReadOnlyMode = {}", this.toString(), maybeUpdatedReadOnlyMode);
 
     if (maybeUpdatedReadOnlyMode != originalIsReadOnlyEnabled) {
       AbstractReadOnlyController.manageActiveClusterIdFile(maybeUpdatedReadOnlyMode,
         this.getMasterFileSystem());
     }
+    LOG.info("kevin: HMaster END onConfigurationChange()");
   }
 
   @Override
