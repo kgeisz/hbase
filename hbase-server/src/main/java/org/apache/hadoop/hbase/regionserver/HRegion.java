@@ -8987,8 +8987,13 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   @Override
   public void onConfigurationChange(Configuration newConf) {
     LOG.info("kevin: HRegion {}: START onConfigurationChange()", this.toString());
+
+    boolean isReadOnlyEnabledInCurrentConf = ConfigurationUtil.isReadOnlyModeEnabledInConf(this.conf);
+    LOG.info("kevin: HRegion {}: is read-only mode enabled in this.conf: {}", this.toString(), isReadOnlyEnabledInCurrentConf);
+
     boolean isReadOnlyEnabledInNewConf = ConfigurationUtil.isReadOnlyModeEnabledInConf(newConf);
     LOG.info("kevin: HRegion {}: trying to set read-only mode to {}", this.toString(), isReadOnlyEnabledInNewConf);
+
     this.storeHotnessProtector.update(newConf);
 
     LOG.info("kevin: HRegion {}: newConf == this.conf: {}", this.toString(), newConf == this.conf);
@@ -8996,6 +9001,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     boolean originalIsReadOnlyEnabled = CoprocessorConfigurationUtil
       .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, this.toString());
     LOG.info("kevin: HRegion {}: originalIsReadOnlyEnabled = {}", this.toString(), originalIsReadOnlyEnabled);
+
+    LOG.info("kevin: HRegion {}: originalIsReadOnlyEnabled == isReadOnlyEnabledInCurrentConf: {}",
+      this.toString(), originalIsReadOnlyEnabled == isReadOnlyEnabledInCurrentConf);
 
     LOG.info("kevin: HRegion about to START maybeUpdateCoprocessors() for {}", this.toString());
     CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, originalIsReadOnlyEnabled,

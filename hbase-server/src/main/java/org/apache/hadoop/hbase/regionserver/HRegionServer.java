@@ -3481,6 +3481,10 @@ public class HRegionServer extends HBaseServerBase<RSRpcServices>
   @Override
   public void onConfigurationChange(Configuration newConf) {
     LOG.info("kevin: HRegionServer {}: START onConfigurationChange()", this.toString());
+
+    boolean isReadOnlyEnabledInCurrentConf = ConfigurationUtil.isReadOnlyModeEnabledInConf(this.conf);
+    LOG.info("kevin: HRegionServer {}: is read-only mode enabled in this.conf: {}", this.toString(), isReadOnlyEnabledInCurrentConf);
+
     boolean isReadOnlyEnabledInNewConf = ConfigurationUtil.isReadOnlyModeEnabledInConf(newConf);
     LOG.info("kevin: HRegionServer {}: trying to set read-only mode to {}", this.toString(), isReadOnlyEnabledInNewConf);
 
@@ -3501,6 +3505,9 @@ public class HRegionServer extends HBaseServerBase<RSRpcServices>
       .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY, this.toString());
     LOG.info("kevin: HRegionServer {}: originalIsReadOnlyEnabled = {}", this.toString(), originalIsReadOnlyEnabled);
 
+    LOG.info("kevin: HRegionServer {}: originalIsReadOnlyEnabled == isReadOnlyEnabledInCurrentConf: {}",
+      this.toString(), originalIsReadOnlyEnabled == isReadOnlyEnabledInCurrentConf);
+
     LOG.info("kevin: HRegionServer about to START maybeUpdateCoprocessors()");
     CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, originalIsReadOnlyEnabled,
       this.rsHost, CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY, false, this.toString(),
@@ -3510,6 +3517,11 @@ public class HRegionServer extends HBaseServerBase<RSRpcServices>
           CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY);
       });
     LOG.info("kevin: HRegionServer just ENDED maybeUpdateCoprocessors()");
+
+    boolean maybeUpdatedReadOnlyMode = CoprocessorConfigurationUtil
+      .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY, this.toString());
+    LOG.info("kevin: HRegionServer {}: maybeUpdatedReadOnlyMode = {}", this.toString(), maybeUpdatedReadOnlyMode);
+
     LOG.info("kevin: HRegionServer {}: END onConfigurationChange()", this.toString());
   }
 
