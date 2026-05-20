@@ -4493,7 +4493,12 @@ public class HMaster extends HBaseServerBase<MasterRpcServices> implements Maste
 
   @Override
   public void onConfigurationChange(Configuration newConf) {
-    LOG.info("kevin: HMaster START onConfigurationChange()");
+    LOG.info("kevin: HMaster: START onConfigurationChange()");
+    boolean isReadOnlyEnabledInNewConf = ConfigurationUtil.isReadOnlyModeEnabledInConf(newConf);
+    LOG.info("kevin: HMaster: trying to set read-only mode to {}", isReadOnlyEnabledInNewConf);
+
+    LOG.info("kevin: HMaster: newConf == this.conf: {}", newConf == this.conf);
+
     try {
       Superusers.initialize(newConf);
     } catch (IOException e) {

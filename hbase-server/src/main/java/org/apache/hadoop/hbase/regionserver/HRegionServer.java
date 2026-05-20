@@ -158,6 +158,7 @@ import org.apache.hadoop.hbase.security.UserProvider;
 import org.apache.hadoop.hbase.trace.TraceUtil;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.CompressionTest;
+import org.apache.hadoop.hbase.util.ConfigurationUtil;
 import org.apache.hadoop.hbase.util.CoprocessorConfigurationUtil;
 import org.apache.hadoop.hbase.util.DNS;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
@@ -3480,6 +3481,11 @@ public class HRegionServer extends HBaseServerBase<RSRpcServices>
   @Override
   public void onConfigurationChange(Configuration newConf) {
     LOG.info("kevin: HRegionServer {}: START onConfigurationChange()", this.toString());
+    boolean isReadOnlyEnabledInNewConf = ConfigurationUtil.isReadOnlyModeEnabledInConf(newConf);
+    LOG.info("kevin: HRegionServer {}: trying to set read-only mode to {}", this.toString(), isReadOnlyEnabledInNewConf);
+
+    LOG.info("kevin: HRegionServer {}: newConf == this.conf: {}", this.toString(), newConf == this.conf);
+
     ThroughputController old = this.flushThroughputController;
     if (old != null) {
       old.stop("configuration change");

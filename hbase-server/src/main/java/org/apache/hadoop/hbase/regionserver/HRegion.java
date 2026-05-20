@@ -8987,7 +8987,11 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   @Override
   public void onConfigurationChange(Configuration newConf) {
     LOG.info("kevin: HRegion {}: START onConfigurationChange()", this.toString());
+    boolean isReadOnlyEnabledInNewConf = ConfigurationUtil.isReadOnlyModeEnabledInConf(newConf);
+    LOG.info("kevin: HRegion {}: trying to set read-only mode to {}", this.toString(), isReadOnlyEnabledInNewConf);
     this.storeHotnessProtector.update(newConf);
+
+    LOG.info("kevin: HRegion {}: newConf == this.conf: {}", this.toString(), newConf == this.conf);
 
     boolean originalIsReadOnlyEnabled = CoprocessorConfigurationUtil
       .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, this.toString());
