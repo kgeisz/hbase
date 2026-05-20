@@ -107,7 +107,9 @@ public class ConfigurationManager {
       for (ConfigurationObserver observer : configurationObservers) {
         try {
           if (observer != null) {
+            LOG.info("kevin: about to START onConfigurationChange for observer: {}", observer.toString());
             observer.onConfigurationChange(conf);
+            LOG.info("kevin: just ENDED onConfigurationChange for observer: {}", observer.toString());
           }
         } catch (Throwable t) {
           LOG.error("Encountered a throwable while notifying observers: of type : {}({})",

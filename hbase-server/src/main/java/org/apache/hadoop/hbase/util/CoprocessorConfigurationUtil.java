@@ -228,13 +228,22 @@ public final class CoprocessorConfigurationUtil {
    *                           coprocessors
    */
   public static void updateCoprocessorListInConf(Configuration currentConf,
-    Configuration updatedConf, String coprocessorConfKey) {
+    Configuration updatedConf, String coprocessorConfKey, String instance) {
+    String componentName = getComponentName(coprocessorConfKey);
+
+    LOG.info("kevin: {} {}: Before update: currentConf.getStrings({}) = {}",
+      componentName, instance, coprocessorConfKey, currentConf.getStrings(coprocessorConfKey));
+
     String[] updatedCoprocessorList = updatedConf.getStrings(coprocessorConfKey);
+    LOG.info("kevin: {} {}: updatedCoprocessorList = {}", componentName, instance, updatedCoprocessorList);
     if (updatedCoprocessorList != null) {
       currentConf.setStrings(coprocessorConfKey, updatedCoprocessorList);
     } else {
       currentConf.unset(coprocessorConfKey);
     }
+
+    LOG.info("kevin: {} {}: After update: currentConf.getStrings({}) = {}",
+      componentName, instance, coprocessorConfKey, currentConf.getStrings(coprocessorConfKey));
   }
 
   /**
