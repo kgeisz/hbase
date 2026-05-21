@@ -239,7 +239,7 @@ public final class CoprocessorConfigurationUtil {
     if (updatedCoprocessorList != null) {
       currentConf.setStrings(coprocessorConfKey, updatedCoprocessorList);
     } else {
-      currentConf.unset(coprocessorConfKey);
+      currentConf.set(coprocessorConfKey, "");
     }
 
     LOG.info("kevin: {} {}: After update: currentConf.getStrings({}) = {}",
