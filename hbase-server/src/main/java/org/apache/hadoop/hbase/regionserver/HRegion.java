@@ -9013,7 +9013,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         this.coprocessorHost = new RegionCoprocessorHost(this, rsServices, conf);
         CoprocessorConfigurationUtil.updateCoprocessorListInConf(this.conf, conf,
           CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, this.toString());
-      });
+      }, this.conf);
     LOG.info("kevin: HRegion just ENDED maybeUpdateCoprocessors() for {}", this.toString());
 
     boolean newReadOnlyEnabled = ConfigurationUtil.isReadOnlyModeEnabledInConf(newConf);

@@ -282,7 +282,7 @@ public final class CoprocessorConfigurationUtil {
   public static void maybeUpdateCoprocessors(Configuration newConf,
     boolean originalIsReadOnlyEnabled, CoprocessorHost<?, ?> coprocessorHost,
     String coprocessorConfKey, boolean isMaintenanceMode, String instance,
-    CoprocessorReloadTask reloadTask) {
+    CoprocessorReloadTask reloadTask, Configuration currentConf) {
 
     boolean maybeUpdatedReadOnlyMode = ConfigurationUtil.isReadOnlyModeEnabledInConf(newConf);
     boolean hasReadOnlyModeChanged = originalIsReadOnlyEnabled != maybeUpdatedReadOnlyMode;
@@ -298,7 +298,15 @@ public final class CoprocessorConfigurationUtil {
     if ((hasCoprocessorConfigChanged || hasReadOnlyModeChanged) && !isMaintenanceMode) {
       LOG.info("Updating coprocessors for {} {} because the configuration has changed",
         getComponentName(coprocessorConfKey), instance);
+      LOG.info("kevin: {} {}: Before syncReadOnlyConfigurations(): currentConf.getStrings({}) = {}",
+        componentName, instance, coprocessorConfKey, currentConf.getStrings(coprocessorConfKey));
+      LOG.info("kevin: {} {}: Before syncReadOnlyConfigurations(): newConf.getStrings({}) = {}",
+        componentName, instance, coprocessorConfKey, newConf.getStrings(coprocessorConfKey));
       CoprocessorConfigurationUtil.syncReadOnlyConfigurations(newConf, coprocessorConfKey);
+      LOG.info("kevin: {} {}: After syncReadOnlyConfigurations(): currentConf.getStrings({}) = {}",
+        componentName, instance, coprocessorConfKey, currentConf.getStrings(coprocessorConfKey));
+      LOG.info("kevin: {} {}: After syncReadOnlyConfigurations(): newConf.getStrings({}) = {}",
+        componentName, instance, coprocessorConfKey, newConf.getStrings(coprocessorConfKey));
       reloadTask.reload(newConf);
     }
 
