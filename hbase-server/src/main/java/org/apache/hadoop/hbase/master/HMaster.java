@@ -4501,6 +4501,8 @@ public class HMaster extends HBaseServerBase<MasterRpcServices> implements Maste
     boolean isReadOnlyEnabledInNewConf = ConfigurationUtil.isReadOnlyModeEnabledInConf(newConf);
     LOG.info("kevin: HMaster: trying to set read-only mode to {}", isReadOnlyEnabledInNewConf);
 
+    LOG.info("kevin: HMaster: System.identityHashCode(newConf) = {}", System.identityHashCode(newConf));
+    LOG.info("kevin: HMaster: System.identityHashCode(this.conf) = {}", System.identityHashCode(this.conf));
     LOG.info("kevin: HMaster: newConf == this.conf: {}", newConf == this.conf);
 
     try {

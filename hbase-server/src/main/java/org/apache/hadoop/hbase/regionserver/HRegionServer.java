@@ -3488,6 +3488,8 @@ public class HRegionServer extends HBaseServerBase<RSRpcServices>
     boolean isReadOnlyEnabledInNewConf = ConfigurationUtil.isReadOnlyModeEnabledInConf(newConf);
     LOG.info("kevin: HRegionServer {}: trying to set read-only mode to {}", this.toString(), isReadOnlyEnabledInNewConf);
 
+    LOG.info("kevin: HRegionServer: System.identityHashCode(newConf) = {}", System.identityHashCode(newConf));
+    LOG.info("kevin: HRegionServer: System.identityHashCode(this.conf) = {}", System.identityHashCode(this.conf));
     LOG.info("kevin: HRegionServer {}: newConf == this.conf: {}", this.toString(), newConf == this.conf);
 
     ThroughputController old = this.flushThroughputController;

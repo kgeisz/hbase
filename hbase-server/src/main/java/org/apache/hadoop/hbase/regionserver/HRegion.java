@@ -8996,6 +8996,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
     this.storeHotnessProtector.update(newConf);
 
+    LOG.info("kevin: HRegion {}: System.identityHashCode(newConf) = {}", this, System.identityHashCode(newConf));
+    LOG.info("kevin: HRegion {}: System.identityHashCode(this.conf) = {}", this, System.identityHashCode(this.conf));
     LOG.info("kevin: HRegion {}: newConf == this.conf: {}", this.toString(), newConf == this.conf);
 
     boolean originalIsReadOnlyEnabled = CoprocessorConfigurationUtil
@@ -9009,10 +9011,14 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, originalIsReadOnlyEnabled,
       this.coprocessorHost, CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, false, this.toString(),
       conf -> {
-        decorateRegionConfiguration(conf);
-        this.coprocessorHost = new RegionCoprocessorHost(this, rsServices, conf);
+        // HRegion's this.conf is a special Configuration type called CompoundConfiguration. This
+        // means we don't want to use the newConf provided in onConfigurationChange(). Instead, we
+        // update this.conf and use it for decorating the region config and updating
+        // this.coprocessorHost.
         CoprocessorConfigurationUtil.updateCoprocessorListInConf(this.conf, conf,
           CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, this.toString());
+        decorateRegionConfiguration(this.conf);
+        this.coprocessorHost = new RegionCoprocessorHost(this, rsServices, this.conf);
       }, this.conf);
     LOG.info("kevin: HRegion just ENDED maybeUpdateCoprocessors() for {}", this.toString());
 
