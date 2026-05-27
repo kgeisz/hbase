@@ -3515,8 +3515,8 @@ public class HRegionServer extends HBaseServerBase<RSRpcServices>
       this.rsHost, CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY, false, this.toString(),
       conf -> {
         this.rsHost = new RegionServerCoprocessorHost(this, conf);
-        CoprocessorConfigurationUtil.updateCoprocessorListInConf(this.conf, conf,
-          CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY, this.toString());
+//        CoprocessorConfigurationUtil.updateCoprocessorListInConf(this.conf, conf,
+//          CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY, this.toString());
       }, this.conf);
     LOG.info("kevin: HRegionServer just ENDED maybeUpdateCoprocessors()");
 

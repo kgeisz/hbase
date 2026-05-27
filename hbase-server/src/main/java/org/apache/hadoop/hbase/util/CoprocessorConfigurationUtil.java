@@ -283,6 +283,7 @@ public final class CoprocessorConfigurationUtil {
     boolean originalIsReadOnlyEnabled, CoprocessorHost<?, ?> coprocessorHost,
     String coprocessorConfKey, boolean isMaintenanceMode, String instance,
     CoprocessorReloadTask reloadTask, Configuration currentConf) {
+    LOG.info("kevin: START maybeUpdateCoprocessors()");
 
     boolean maybeUpdatedReadOnlyMode = ConfigurationUtil.isReadOnlyModeEnabledInConf(newConf);
     boolean hasReadOnlyModeChanged = originalIsReadOnlyEnabled != maybeUpdatedReadOnlyMode;
@@ -315,5 +316,48 @@ public final class CoprocessorConfigurationUtil {
         HConstants.HBASE_GLOBAL_READONLY_ENABLED_KEY, maybeUpdatedReadOnlyMode,
         getComponentName(coprocessorConfKey), instance);
     }
+
+    LOG.info("kevin: END maybeUpdateCoprocessors()");
+  }
+
+  public static void maybeUpdateHRegionCoprocessors(Configuration newConf,
+    boolean originalIsReadOnlyEnabled, CoprocessorHost<?, ?> coprocessorHost,
+    String coprocessorConfKey, boolean isMaintenanceMode, String instance,
+    CoprocessorReloadTask reloadTask, Configuration currentConf) {
+    LOG.info("kevin: START maybeUpdateHRegionCoprocessors()");
+
+    boolean maybeUpdatedReadOnlyMode = ConfigurationUtil.isReadOnlyModeEnabledInConf(newConf);
+    boolean hasReadOnlyModeChanged = originalIsReadOnlyEnabled != maybeUpdatedReadOnlyMode;
+    boolean hasCoprocessorConfigChanged = CoprocessorConfigurationUtil
+      .checkConfigurationChange(coprocessorHost, newConf, coprocessorConfKey);
+
+    String componentName = getComponentName(coprocessorConfKey);
+    LOG.info("kevin: {} {}: maybeUpdatedReadOnlyMode = {}", componentName, instance, maybeUpdatedReadOnlyMode);
+    LOG.info("kevin: {} {}: hasReadOnlyModeChanged = {}", componentName, instance, hasReadOnlyModeChanged);
+    LOG.info("kevin: {} {}: hasCoprocessorConfigChanged = {}", componentName, instance, hasCoprocessorConfigChanged);
+
+    // update region server coprocessor if the configuration has changed.
+    if ((hasCoprocessorConfigChanged || hasReadOnlyModeChanged) && !isMaintenanceMode) {
+      LOG.info("Updating coprocessors for {} {} because the configuration has changed",
+        getComponentName(coprocessorConfKey), instance);
+      LOG.info("kevin: {} {}: Before syncReadOnlyConfigurations(): currentConf.getStrings({}) = {}",
+        componentName, instance, coprocessorConfKey, currentConf.getStrings(coprocessorConfKey));
+      LOG.info("kevin: {} {}: Before syncReadOnlyConfigurations(): newConf.getStrings({}) = {}",
+        componentName, instance, coprocessorConfKey, newConf.getStrings(coprocessorConfKey));
+      CoprocessorConfigurationUtil.syncReadOnlyConfigurations(currentConf, coprocessorConfKey);
+      LOG.info("kevin: {} {}: After syncReadOnlyConfigurations(): currentConf.getStrings({}) = {}",
+        componentName, instance, coprocessorConfKey, currentConf.getStrings(coprocessorConfKey));
+      LOG.info("kevin: {} {}: After syncReadOnlyConfigurations(): newConf.getStrings({}) = {}",
+        componentName, instance, coprocessorConfKey, newConf.getStrings(coprocessorConfKey));
+      reloadTask.reload(newConf);
+    }
+
+    if (hasReadOnlyModeChanged) {
+      LOG.info("Config {} has been dynamically changed to {} for {} {}",
+        HConstants.HBASE_GLOBAL_READONLY_ENABLED_KEY, maybeUpdatedReadOnlyMode,
+        getComponentName(coprocessorConfKey), instance);
+    }
+
+    LOG.info("kevin: END maybeUpdateHRegionCoprocessors()");
   }
 }
