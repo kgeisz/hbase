@@ -212,26 +212,6 @@ public final class CoprocessorConfigurationUtil {
   }
 
   /**
-   * Takes an updated configuration and updates the coprocessors for that configuration key in the
-   * current configuration.
-   * @param currentConf        the configuration currently used by the master, region server, or
-   *                           region
-   * @param updatedConf        the updated version of the configuration whose coprocessors we want
-   *                           to copy
-   * @param coprocessorConfKey configuration key used for setting master, region server, or region
-   *                           coprocessors
-   */
-  public static void updateCoprocessorListInConf(Configuration currentConf,
-    Configuration updatedConf, String coprocessorConfKey) {
-    String[] updatedCoprocessorList = updatedConf.getStrings(coprocessorConfKey);
-    if (updatedCoprocessorList != null) {
-      currentConf.setStrings(coprocessorConfKey, updatedCoprocessorList);
-    } else {
-      currentConf.unset(coprocessorConfKey);
-    }
-  }
-
-  /**
    * Gets the name of a component based on the provided coprocessor configuration key.
    * @param coprocessorConfKey configuration key used for setting master, region server, or region
    *                           coprocessors
@@ -253,6 +233,8 @@ public final class CoprocessorConfigurationUtil {
    * configuration. If a change is detected, then new coprocessors are loaded using the provided
    * reload method. The new value for the read-only config variable is updated as well.
    * @param newConf                   an updated configuration
+   * @param confToUpdate              the actual configuration we want to update, which may or may
+   *                                  not be the same as {@code newConf}
    * @param originalIsReadOnlyEnabled the original value for
    *                                  {@value HConstants#HBASE_GLOBAL_READONLY_ENABLED_KEY}
    * @param coprocessorHost           the coprocessor host for HMaster, HRegionServer, or HRegion
@@ -264,28 +246,43 @@ public final class CoprocessorConfigurationUtil {
    * @param reloadTask                lambda function that reloads coprocessors on the master,
    *                                  region server, or region
    */
-  public static void maybeUpdateCoprocessors(Configuration newConf,
+  public static void maybeUpdateCoprocessors(Configuration newConf, Configuration confToUpdate,
     boolean originalIsReadOnlyEnabled, CoprocessorHost<?, ?> coprocessorHost,
     String coprocessorConfKey, boolean isMaintenanceMode, String instance,
     CoprocessorReloadTask reloadTask) {
 
-    boolean maybeUpdatedReadOnlyMode = ConfigurationUtil.isReadOnlyModeEnabledInConf(newConf);
-    boolean hasReadOnlyModeChanged = originalIsReadOnlyEnabled != maybeUpdatedReadOnlyMode;
+    String componentName = getComponentName(coprocessorConfKey);
+    boolean currentReadOnlyMode = ConfigurationUtil.isReadOnlyModeEnabledInConf(newConf);
+    boolean hasReadOnlyModeChanged = originalIsReadOnlyEnabled != currentReadOnlyMode;
     boolean hasCoprocessorConfigChanged = CoprocessorConfigurationUtil
       .checkConfigurationChange(coprocessorHost, newConf, coprocessorConfKey);
 
-    // update region server coprocessor if the configuration has changed.
     if ((hasCoprocessorConfigChanged || hasReadOnlyModeChanged) && !isMaintenanceMode) {
       LOG.info("Updating coprocessors for {} {} because the configuration has changed",
-        getComponentName(coprocessorConfKey), instance);
-      CoprocessorConfigurationUtil.syncReadOnlyConfigurations(newConf, coprocessorConfKey);
-      reloadTask.reload(newConf);
+        componentName, instance);
+      if (hasReadOnlyModeChanged) {
+        CoprocessorConfigurationUtil.syncReadOnlyConfigurations(confToUpdate, coprocessorConfKey);
+      }
+      reloadTask.reload(confToUpdate);
     }
 
     if (hasReadOnlyModeChanged) {
       LOG.info("Config {} has been dynamically changed to {} for {} {}",
-        HConstants.HBASE_GLOBAL_READONLY_ENABLED_KEY, maybeUpdatedReadOnlyMode,
-        getComponentName(coprocessorConfKey), instance);
+        HConstants.HBASE_GLOBAL_READONLY_ENABLED_KEY, currentReadOnlyMode, componentName, instance);
     }
+  }
+
+  /**
+   * Similar to the other implementation of maybeUpdateCoprocessors(), except newConf is the conf
+   * being updated. This is useful for onConfigurationChange() in HMaster and HRegionServer, where
+   * their this.conf variable references the same object as the newConf arg in their respective
+   * onConfigurationChange() method.
+   */
+  public static void maybeUpdateCoprocessors(Configuration newConf,
+    boolean originalIsReadOnlyEnabled, CoprocessorHost<?, ?> coprocessorHost,
+    String coprocessorConfKey, boolean isMaintenanceMode, String instance,
+    CoprocessorReloadTask reloadTask) {
+    maybeUpdateCoprocessors(newConf, newConf, originalIsReadOnlyEnabled, coprocessorHost,
+      coprocessorConfKey, isMaintenanceMode, instance, reloadTask);
   }
 }

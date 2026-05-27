@@ -8991,13 +8991,17 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     boolean originalIsReadOnlyEnabled = CoprocessorConfigurationUtil
       .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.REGION_COPROCESSOR_CONF_KEY);
 
-    CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, originalIsReadOnlyEnabled,
-      this.coprocessorHost, CoprocessorHost.REGION_COPROCESSOR_CONF_KEY, false, this.toString(),
-      conf -> {
+    // HRegion's this.conf is a special Configuration type called CompoundConfiguration. This means
+    // we don't want to use the newConf provided in onConfigurationChange() for creating a new
+    // RegionCoprocessorHost. Instead, we update this.conf and use that for decorating the region
+    // config and updating this.coprocessorHost. Also, we do not need to explicitly update
+    // hbase.global.readonly.enabled in this.conf because the CompoundConfiguration holds a
+    // reference to HBaseServerBase's conf, which was updated automatically.
+    CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, this.conf,
+      originalIsReadOnlyEnabled, this.coprocessorHost, CoprocessorHost.REGION_COPROCESSOR_CONF_KEY,
+      false, this.toString(), conf -> {
         decorateRegionConfiguration(conf);
         this.coprocessorHost = new RegionCoprocessorHost(this, rsServices, conf);
-        CoprocessorConfigurationUtil.updateCoprocessorListInConf(this.conf, conf,
-          CoprocessorHost.REGION_COPROCESSOR_CONF_KEY);
       });
 
     boolean newReadOnlyEnabled = ConfigurationUtil.isReadOnlyModeEnabledInConf(newConf);

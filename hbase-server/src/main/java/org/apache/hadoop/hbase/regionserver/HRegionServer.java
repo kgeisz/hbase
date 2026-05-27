@@ -3499,13 +3499,11 @@ public class HRegionServer extends HBaseServerBase<RSRpcServices>
     boolean originalIsReadOnlyEnabled = CoprocessorConfigurationUtil
       .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY);
 
+    // newConf and this.conf reference the same Configuration object, so it doesn't matter which
+    // one we update
     CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, originalIsReadOnlyEnabled,
       this.rsHost, CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY, false, this.toString(),
-      conf -> {
-        this.rsHost = new RegionServerCoprocessorHost(this, conf);
-        CoprocessorConfigurationUtil.updateCoprocessorListInConf(this.conf, conf,
-          CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY);
-      });
+      conf -> this.rsHost = new RegionServerCoprocessorHost(this, conf));
   }
 
   @Override

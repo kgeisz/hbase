@@ -4504,13 +4504,11 @@ public class HMaster extends HBaseServerBase<MasterRpcServices> implements Maste
     boolean originalIsReadOnlyEnabled = CoprocessorConfigurationUtil
       .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY);
 
+    // newConf and this.conf reference the same Configuration object, so it doesn't matter which
+    // one we update
     CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, originalIsReadOnlyEnabled,
       this.cpHost, CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, this.maintenanceMode,
-      this.toString(), conf -> {
-        this.initializeCoprocessorHost(conf);
-        CoprocessorConfigurationUtil.updateCoprocessorListInConf(this.conf, conf,
-          CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY);
-      });
+      this.toString(), this::initializeCoprocessorHost);
 
     boolean maybeUpdatedReadOnlyMode = CoprocessorConfigurationUtil
       .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY);
