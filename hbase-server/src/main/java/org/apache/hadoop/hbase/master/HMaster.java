@@ -4522,9 +4522,9 @@ public class HMaster extends HBaseServerBase<MasterRpcServices> implements Maste
       this.cpHost, CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, this.maintenanceMode,
       this.toString(), conf -> {
         this.initializeCoprocessorHost(conf);
-//        CoprocessorConfigurationUtil.updateCoprocessorListInConf(this.conf, conf,
-//          CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, this.toString());
-      }, this.conf);
+        CoprocessorConfigurationUtil.updateCoprocessorListInConf(this.conf, conf,
+          CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, this.toString());
+      });
     LOG.info("kevin: HMaster just ENDED maybeUpdateCoprocessors()");
 
     boolean maybeUpdatedReadOnlyMode = CoprocessorConfigurationUtil
