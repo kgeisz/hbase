@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HConstants;
@@ -178,6 +179,19 @@ public final class CoprocessorConfigurationUtil {
     return READONLY_COPROCESSORS.get(configurationKey);
   }
 
+  private static void syncCoprocessorsWithConf(Configuration srcConf, Configuration dstConf,
+    String coprocessorConfKey) {
+    String configuredCps = srcConf.get(coprocessorConfKey);
+    dstConf.set(coprocessorConfKey, Objects.requireNonNullElse(configuredCps, ""));
+
+    // A configuration with region coprocessors also may have user region coprocessors
+    if (CoprocessorHost.REGION_COPROCESSOR_CONF_KEY.equals(coprocessorConfKey)) {
+      String configuredUserCps = srcConf.get(CoprocessorHost.USER_REGION_COPROCESSOR_CONF_KEY);
+      dstConf.set(CoprocessorHost.USER_REGION_COPROCESSOR_CONF_KEY,
+        Objects.requireNonNullElse(configuredUserCps, ""));
+    }
+  }
+
   /**
    * This method adds or removes relevant ReadOnlyController coprocessors to the provided
    * configuration based on whether read-only mode is enabled in the provided Configuration.
@@ -261,10 +275,11 @@ public final class CoprocessorConfigurationUtil {
     if ((hasCoprocessorConfigChanged || hasReadOnlyModeChanged) && !isMaintenanceMode) {
       LOG.info("Updating coprocessors for {} {} because the configuration has changed",
         componentName, instance);
+      if (newConf != confToUpdate) {
+        syncCoprocessorsWithConf(newConf, confToUpdate, coprocessorConfKey);
+        confToUpdate.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, currentReadOnlyMode);
+      }
       if (hasReadOnlyModeChanged) {
-        if (newConf != confToUpdate) {
-          confToUpdate.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, currentReadOnlyMode);
-        }
         CoprocessorConfigurationUtil.syncReadOnlyConfigurations(confToUpdate, coprocessorConfKey);
       }
       reloadTask.reload(confToUpdate);
