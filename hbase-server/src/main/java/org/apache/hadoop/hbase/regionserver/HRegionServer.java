@@ -3501,7 +3501,7 @@ public class HRegionServer extends HBaseServerBase<RSRpcServices>
 
     // newConf and this.conf reference the same Configuration object, so it doesn't matter which
     // one we update
-    CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, originalIsReadOnlyEnabled,
+    CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, this.conf, originalIsReadOnlyEnabled,
       this.rsHost, CoprocessorHost.REGIONSERVER_COPROCESSOR_CONF_KEY, false, this.toString(),
       conf -> this.rsHost = new RegionServerCoprocessorHost(this, conf));
   }

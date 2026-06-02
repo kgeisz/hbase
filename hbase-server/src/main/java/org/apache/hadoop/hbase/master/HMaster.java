@@ -4506,7 +4506,7 @@ public class HMaster extends HBaseServerBase<MasterRpcServices> implements Maste
 
     // newConf and this.conf reference the same Configuration object, so it doesn't matter which
     // one we update
-    CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, originalIsReadOnlyEnabled,
+    CoprocessorConfigurationUtil.maybeUpdateCoprocessors(newConf, this.conf, originalIsReadOnlyEnabled,
       this.cpHost, CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY, this.maintenanceMode,
       this.toString(), this::initializeCoprocessorHost);
 
