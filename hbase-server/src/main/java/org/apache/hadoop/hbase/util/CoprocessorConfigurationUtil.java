@@ -39,6 +39,7 @@ import org.apache.hbase.thirdparty.com.google.common.base.Preconditions;
 import org.apache.hbase.thirdparty.com.google.common.base.Strings;
 import org.apache.hbase.thirdparty.com.google.common.collect.ImmutableList;
 import org.apache.hbase.thirdparty.com.google.common.collect.ImmutableMap;
+import static org.apache.hadoop.hbase.HConstants.HBASE_GLOBAL_READONLY_ENABLED_KEY;
 
 /**
  * Helper class for coprocessor host when configuration changes.
@@ -261,6 +262,9 @@ public final class CoprocessorConfigurationUtil {
       LOG.info("Updating coprocessors for {} {} because the configuration has changed",
         componentName, instance);
       if (hasReadOnlyModeChanged) {
+        if (newConf != confToUpdate) {
+          confToUpdate.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, currentReadOnlyMode);
+        }
         CoprocessorConfigurationUtil.syncReadOnlyConfigurations(confToUpdate, coprocessorConfKey);
       }
       reloadTask.reload(confToUpdate);
@@ -268,7 +272,7 @@ public final class CoprocessorConfigurationUtil {
 
     if (hasReadOnlyModeChanged) {
       LOG.info("Config {} has been dynamically changed to {} for {} {}",
-        HConstants.HBASE_GLOBAL_READONLY_ENABLED_KEY, currentReadOnlyMode, componentName, instance);
+        HBASE_GLOBAL_READONLY_ENABLED_KEY, currentReadOnlyMode, componentName, instance);
     }
   }
 
