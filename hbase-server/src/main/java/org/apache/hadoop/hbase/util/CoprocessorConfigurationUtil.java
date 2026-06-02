@@ -276,12 +276,13 @@ public final class CoprocessorConfigurationUtil {
       LOG.info("Updating coprocessors for {} {} because the configuration has changed",
         componentName, instance);
       if (newConf != confToUpdate) {
+        // Make the original configuration's coprocessors match the updated configuration's
         syncCoprocessorsWithConf(newConf, confToUpdate, coprocessorConfKey);
         confToUpdate.setBoolean(HBASE_GLOBAL_READONLY_ENABLED_KEY, currentReadOnlyMode);
       }
-      if (hasReadOnlyModeChanged) {
-        CoprocessorConfigurationUtil.syncReadOnlyConfigurations(confToUpdate, coprocessorConfKey);
-      }
+      // This needs to run even if read-only mode has not changed in case ReadOnly coprocessors
+      // were unintentionally added/removed in the previous code block
+      syncReadOnlyConfigurations(confToUpdate, coprocessorConfKey);
       reloadTask.reload(confToUpdate);
     }
 
