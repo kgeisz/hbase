@@ -38,7 +38,7 @@ def refresh_replica_and_verify_tables(replica_cluster: HBaseDockerClient, new_ta
     replica_cluster.refresh_hfiles()
     replica_cluster.assert_table_exists(new_table)
     for i, table in enumerate(tables[::-1], 1):
-        cluster2.assert_table_row_count(table, i)
+        replica_cluster.assert_table_row_count(table, i)
 
 
 def create_table_and_test_active_and_replica_clusters(active_cluster: HBaseDockerClient,
@@ -130,27 +130,22 @@ if __name__ == '__main__':
                                  hbase_ui_port=get_env('REPLICA_CLUSTER_PORT'),
                                  cluster_name="Cluster 2")
 
-    iterations = 5
-    for i in range(1, iterations+1):
-        logger.info(f"----- Iteration {i} -----")
-        logger.info(f"Ensuring clusters are in proper modes. "
-                    f"Making both clusters a replica, and then making {cluster1.name} the active cluster")
-        cluster1.enable_read_only_mode()
-        cluster2.enable_read_only_mode()
-        cluster1.disable_read_only_mode()
-
-        # Create table on active cluster
-        HBaseDockerClient.clean_up_tables(cluster1, cluster2)
+    HBaseDockerClient.stop_containers(data_store_root)
+    cluster1.disable_read_only_mode(run_update_all_config=False)
+    cluster2.enable_read_only_mode(run_update_all_config=False)
+    HBaseDockerClient.start_or_restart_containers()
+    HBaseDockerClient.wait_for_clusters_to_start([cluster1, cluster2])
 
     test_iterations = 3
     read_only_flag_flips_per_iteration = 6
     for i in range(1, test_iterations + 1):
         logger.info(f"---------- Iteration {i} ----------")
-        logger.info(f"Ensuring clusters are in proper modes. "
-                    f"Making both clusters a replica, and then making {cluster1.name} the active cluster")
-        cluster1.enable_read_only_mode()
-        cluster2.enable_read_only_mode()
-        cluster1.disable_read_only_mode()
+        if i > 1:
+            logger.info(f"Ensuring clusters are in proper modes. "
+                        f"Making both clusters a replica, and then making {cluster1.name} the active cluster")
+            cluster1.enable_read_only_mode()
+            cluster2.enable_read_only_mode()
+            cluster1.disable_read_only_mode()
 
         # Create table on active cluster
         HBaseDockerClient.clean_up_tables(cluster1, cluster2)

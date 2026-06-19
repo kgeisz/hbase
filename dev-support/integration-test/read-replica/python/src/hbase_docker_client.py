@@ -86,8 +86,10 @@ class HBaseDockerClient:
                            f"{self._max_retries} attempts. "
                            f"Last raised exception was: {last_exception}")
 
-    def check_server_status(self):
+    def check_server_status(self, desired_status: dict = None):
         """Runs 'status' inside the HBase shell and validates the output."""
+        if desired_status is None:
+            desired_status = {'masters': '1', 'region_servers': '1', 'dead_servers': '0'}
         logger.info(f"Validating Cluster Status: {self._cluster_name} ({self._container_name})")
         for attempt in range(1, self._max_retries + 1):
             try:
@@ -96,9 +98,9 @@ class HBaseDockerClient:
                 # The cluster's status should have 1 active master, 1 region server,
                 # and no dead servers
                 validations = {
-                    "Active Master": "1 active master" in output,
-                    "Region Server": "1 servers" in output,
-                    "No Dead Servers": "0 dead" in output
+                    "Active Master": f"{desired_status['masters']} active master" in output,
+                    "Region Server": f"{desired_status['region_servers']} servers" in output,
+                    "No Dead Servers": f"{desired_status['dead_servers']} dead" in output
                 }
 
                 if all(validations.values()):
@@ -124,6 +126,11 @@ class HBaseDockerClient:
     def get_hbase_status(self):
         logger.debug(f"Getting status of {self.name}")
         return self.run_hbase_shell_command("status")
+
+    def wait_for_cluster_to_start(self):
+        """curls the cluster's HBase UI to make sure it is up and then makes sure all desired servers are up"""
+        self.wait_for_hbase_ui()
+        self.check_server_status()
 
     def create_table(self, table_name, column_family):
         logger.info(f"Creating table '{table_name}' on {self._cluster_name}")
@@ -216,25 +223,36 @@ class HBaseDockerClient:
         logger.debug(f"Refreshing HFiles on {self.name}")
         self.run_hbase_shell_command("refresh_hfiles")
 
-    def enable_read_only_mode(self):
+    def enable_read_only_mode(self, run_update_all_config=True):
         """
         Sets hbase.global.readonly.enabled to 'true' in the local hbase-site.xml file and runs update_all_config
         to dynamically update the configuration. This method assumes the hbase-site.xml file is a mounted volume
         in the docker-compose file, which allows the config file within the docker container to be updated as well.
         """
-        logger.info(f"Enabling read-only mode on {self.name}")
-        self.set_hbase_conf_property_value('hbase.global.readonly.enabled', 'true')
-        self.update_all_config()
+        self._set_read_only_mode(new_read_only_flag=True, run_update_all_config=run_update_all_config)
 
-    def disable_read_only_mode(self):
+    def disable_read_only_mode(self, run_update_all_config=True):
         """
         Sets hbase.global.readonly.enabled to 'false' in the local hbase-site.xml file and runs update_all_config
         to dynamically update the configuration. This method assumes the hbase-site.xml file is a mounted volume
         in the docker-compose file, which allows the config file within the docker container to be updated as well.
         """
-        logger.info(f"Disabling read-only mode on {self.name}")
-        self.set_hbase_conf_property_value('hbase.global.readonly.enabled', 'false')
-        self.update_all_config()
+        self._set_read_only_mode(new_read_only_flag=False, run_update_all_config=run_update_all_config)
+
+    def _set_read_only_mode(self, new_read_only_flag: bool, run_update_all_config=True):
+        action = "Enabling" if new_read_only_flag else "Disabling"
+        conjunction_adverb = "and then" if run_update_all_config else "but not"
+        logger.info(f"{action} read-only mode in conf for {self.name} "
+                    f"{conjunction_adverb} running update_all_config after")
+
+        new_read_only_flag = str(new_read_only_flag).lower()
+        self.set_hbase_conf_property_value('hbase.global.readonly.enabled', new_read_only_flag)
+        actual = self.get_hbase_conf_property_value('hbase.global.readonly.enabled')
+        assert actual == new_read_only_flag, (
+            f"Expected hbase.global.readonly.enabled={new_read_only_flag} on {self.name}, but got '{actual}'"
+        )
+        if run_update_all_config:
+            self.update_all_config()
 
     def update_all_config(self):
         logger.debug(f"Running update_all_config on {self.name} to dynamically update the configuration")
@@ -315,6 +333,60 @@ class HBaseDockerClient:
         assert actual_row_count == f"{expected_row_count} row(s)" in output, \
             (f"Expected table '{table_name}' on {self.name} to have {expected_row_count} row(s). "
              f"Instead got {actual_row_count}")
+
+    @staticmethod
+    def wait_for_clusters_to_start(clusters: list):
+        for cluster in clusters:
+            cluster.wait_for_cluster_to_start()
+        logger.info("=" * 40)
+        logger.info("ALL CLUSTERS VERIFIED AND READY")
+        logger.info("=" * 40)
+
+    @staticmethod
+    def are_containers_running() -> bool:
+        result = subprocess.run(
+            ["docker", "compose", "ps", "--status", "running", "-q"],
+            capture_output=True,
+            text=True
+        )
+        return bool(result.stdout.strip())
+
+    @staticmethod
+    def start_or_restart_containers():
+        if HBaseDockerClient.are_containers_running():
+            logger.info("Restarting docker containers")
+            command = ["docker", "compose", "restart"]
+            action = "restart"
+        else:
+            logger.info("Starting docker containers")
+            command = ["docker", "compose", "up", "-d"]
+            action = "start"
+
+        logger.info(f"Running: {' '.join(command)}")
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"docker compose {action} failed (exit {result.returncode}):\n"
+                f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+            )
+        logger.info(f"docker compose {action} completed successfully")
+
+    @staticmethod
+    def stop_containers(data_dir=None):
+        command = "docker compose down"
+        log_msg = "Stopping docker containers"
+        if data_dir:
+            command += f" && rm -rf {data_dir}"
+            log_msg += f" and deleting HBase data root dir at: {data_dir}"
+        logger.info(f"{log_msg}")
+        logger.info(f"Running: '{command}'")
+        result = subprocess.run(command, capture_output=True, text=True, shell=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"stop_containers failed (exit {result.returncode}):\n"
+                f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+            )
+        logger.info("Successfully stopped docker containers")
 
     @staticmethod
     def clean_up_tables(active_cluster, replica_cluster):
