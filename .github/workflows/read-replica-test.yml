@@ -25,6 +25,34 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || 'HBASE-29081' }}
           path: ${{ env.REPLICA_BASE_DIR }}/hbase
 
+      - name: Load .env File into GitHub Actions Environment
+              run: |
+                echo "=== Parsing .env file and exporting to GITHUB_ENV ==="
+                echo "Currently in directory: $(pwd)"
+                while IFS= read -r line || [ -n "$line" ]; do
+                  # Skip comments, empty lines, and internal parser annotations
+                  [[ "$line" =~ ^# ]] && continue
+                  [[ "$line" =~ ^\[source ]] && continue
+                  [[ -z "$line" ]] && continue
+
+                  if [[ "$line" =~ ^([^=]+)=(.*)$ ]]; then
+                    key="${BASH_REMATCH[1]}"
+                    val="${BASH_REMATCH[2]}"
+
+                    # Strip trailing comments and whitespace
+                    val="${val%%#*}"
+                    key=$(echo "$key" | xargs)
+                    val=$(echo "$val" | xargs)
+
+                    # Evaluate the string to expand variables like ${RUNNER_TEMP} or ${GITHUB_WORKSPACE}
+                    eval "expanded_val=\"$val\""
+
+                    # Export to the runner's environment
+                    echo "$key=$expanded_val" >> $GITHUB_ENV
+                    echo "Loaded: $key=$expanded_val"
+                  fi
+                done < .env
+
       - name: Set up Docker Compose
         # This action ensures Docker Compose is installed and available
         uses: docker/setup-compose-action@v2
@@ -55,6 +83,7 @@ jobs:
       - name: Prepare Host Data Directory
         run: |
           # Create the data-store directory at /home/runner/work/_temp
+          echo "HBASE_DATA_STORE_ROOT = ${HBASE_DATA_STORE_ROOT}"
           mkdir -p ${HBASE_DATA_STORE_ROOT}/data-store/hbase ${HBASE_DATA_STORE_ROOT}/data-store/run \
                    ${HBASE_DATA_STORE_ROOT}/data-store/logs ${HBASE_DATA_STORE_ROOT}/data-store/zk
           chmod -R 777 ${HBASE_DATA_STORE_ROOT}
