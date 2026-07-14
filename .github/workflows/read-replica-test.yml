@@ -55,10 +55,11 @@ jobs:
       - name: Prepare Host Data Directory
         run: |
           # Create the data-store directory at /home/runner/work/_temp
-          mkdir -p ${RUNNER_TEMP}/data-store/hbase ${RUNNER_TEMP}/data-store/run \
-                   ${RUNNER_TEMP}/data-store/logs ${RUNNER_TEMP}/data-store/zk
+          mkdir -p ${HBASE_DATA_STORE_ROOT}/data-store/hbase ${HBASE_DATA_STORE_ROOT}/data-store/run \
+                   ${HBASE_DATA_STORE_ROOT}/data-store/logs ${HBASE_DATA_STORE_ROOT}/data-store/zk
+          chmod -R 777 ${HBASE_DATA_STORE_ROOT}
           # Change ownership to UID 1000 (matches 'hbase' user in Dockerfile)
-          sudo chown -R 1000:1000 ${RUNNER_TEMP}/data-store
+          # sudo chown -R 1000:1000 ${HBASE_DATA_STORE_ROOT}/data-store
 
       - name: Build Docker Image
         run: |
