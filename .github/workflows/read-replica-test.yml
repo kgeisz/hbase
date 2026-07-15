@@ -100,7 +100,7 @@ jobs:
       - name: Start HBase Docker Containers
         run: |
           echo "PYTHONPATH = ${PYTHONPATH}"
-          docker compose -f docker-compose.test.yml up -d
+          docker compose -f docker-compose.yml up -d
           echo "Waiting for HBase clusters to initialize..."
           python3 python/scripts/verify_hbase_start.py
           echo "Clusters are up!"
@@ -115,7 +115,7 @@ jobs:
         run: python3 python/scripts/test_read_only_flag_flipping.py
 
       - name: Clean up
-        run: docker compose -f docker-compose.test.yml down
+        run: docker compose -f docker-compose.yml down
 
       - name: Dump Logs on Failure
         if: failure()
