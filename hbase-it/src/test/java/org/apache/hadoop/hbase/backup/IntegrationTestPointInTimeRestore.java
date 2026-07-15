@@ -17,16 +17,13 @@
  */
 package org.apache.hadoop.hbase.backup;
 
-import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.CONF_BACKUP_MAX_WAL_SIZE;
-import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.CONF_STAGED_WAL_FLUSH_INITIAL_DELAY;
-import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.CONF_STAGED_WAL_FLUSH_INTERVAL;
 import static org.apache.hadoop.hbase.backup.replication.ContinuousBackupReplicationEndpoint.ONE_DAY_IN_MILLISECONDS;
 import static org.apache.hadoop.hbase.mapreduce.WALPlayer.IGNORE_EMPTY_FILES;
 import static org.apache.hadoop.hbase.mapreduce.WALPlayer.IGNORE_MISSING_FILES;
 import static org.apache.hadoop.hbase.replication.regionserver.ReplicationMarkerChore.REPLICATION_MARKER_ENABLED_KEY;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -39,14 +36,17 @@ import org.apache.hadoop.hbase.backup.impl.BackupAdminImpl;
 import org.apache.hadoop.hbase.backup.util.BackupUtils;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.Table;
+import org.apache.hadoop.hbase.testclassification.IntegrationTests;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.hbase.thirdparty.com.google.common.collect.Lists;
 
+@Tag(IntegrationTests.TAG)
 public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRestoreBase {
   private static final String CLASS_NAME = IntegrationTestPointInTimeRestore.class.getSimpleName();
   protected static final Logger LOG =
@@ -55,13 +55,10 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
   private static Path restoreRootDir;
 
   @Override
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     initializeTestParameters();
     BackupTestUtil.enableBackup(conf);
-    conf.set(CONF_BACKUP_MAX_WAL_SIZE, "10240");
-    conf.set(CONF_STAGED_WAL_FLUSH_INITIAL_DELAY, "10");
-    conf.set(CONF_STAGED_WAL_FLUSH_INTERVAL, "10");
     conf.setBoolean(REPLICATION_MARKER_ENABLED_KEY, true);
     conf.setBoolean(IGNORE_EMPTY_FILES, true);
     conf.setBoolean(IGNORE_MISSING_FILES, true);
@@ -126,8 +123,8 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
 
       // The original table still has all of its rows
       int expectedCurrentRowCount = rowsInIteration * 2;
-      assertEquals("The original table should still have " + expectedCurrentRowCount + " rows",
-        expectedCurrentRowCount, PITRTestUtil.getRowCount(util, tableName));
+      assertEquals(expectedCurrentRowCount, PITRTestUtil.getRowCount(util, tableName),
+        "The original table should still have " + expectedCurrentRowCount + " rows");
 
       for (int i = 1; i <= 2; i++) {
         numDaysAgo = numDaysAgo - 2;
@@ -150,8 +147,8 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
 
         // The original table still has all of its rows
         expectedCurrentRowCount = expectedCurrentRowCount + 2 * rowsInIteration;
-        assertEquals("The original table should still have " + expectedCurrentRowCount + " rows",
-          expectedCurrentRowCount, PITRTestUtil.getRowCount(util, tableName));
+        assertEquals(expectedCurrentRowCount, PITRTestUtil.getRowCount(util, tableName),
+          "The original table should still have " + expectedCurrentRowCount + " rows");
       }
 
       // runInputScanner();
