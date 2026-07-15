@@ -113,6 +113,9 @@ jobs:
 
       - name: Test Read-Only Flag Flipping
         run: |
+          echo "Who am I?"
+          whoami
+          echo ""
           echo "Listing ${HBASE_DATA_STORE_ROOT}"
           ls -la "${HBASE_DATA_STORE_ROOT}"
           echo ""
