@@ -88,7 +88,7 @@ jobs:
                    ${HBASE_DATA_STORE_ROOT}/data-store/logs ${HBASE_DATA_STORE_ROOT}/data-store/zk
           chmod -R 777 ${HBASE_DATA_STORE_ROOT}
           # Change ownership to UID 1000 (matches 'hbase' user in Dockerfile)
-          sudo chown -R 1000:1000 ${HBASE_DATA_STORE_ROOT}
+          # sudo chown -R 1000:1000 ${HBASE_DATA_STORE_ROOT}/data-store
 
       # - name: Build Docker Image
       #   run: |

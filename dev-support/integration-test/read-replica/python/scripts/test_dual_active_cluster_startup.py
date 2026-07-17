@@ -63,7 +63,7 @@ if __name__ == '__main__':
     for i in range(1, test_iterations+1):
         logger.info(f"---------- Iteration {i} ----------")
 
-        HBaseDockerClient.stop_containers(docker_compose_file=docker_compose_file, data_dir=f'{data_store_root}/*', sudo=True)
+        HBaseDockerClient.stop_containers(docker_compose_file=docker_compose_file, data_dir=f'{data_store_root}/data-store/*', sudo=True)
 
         # Set both clusters to active mode (read-only disabled)
         cluster1.disable_read_only_mode(run_update_all_config=False)
