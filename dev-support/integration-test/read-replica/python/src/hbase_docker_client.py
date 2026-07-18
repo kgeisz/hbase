@@ -335,6 +335,22 @@ class HBaseDockerClient:
              f"Instead got {actual_row_count}")
 
     @staticmethod
+    def __run_subprocess_command(command, error_msg, shell=False):
+        if shell:
+            cmd_msg = command
+        else:
+            cmd_msg = f"{' '.join(command)}"
+        logger.info(f"Running: {cmd_msg}")
+        result = subprocess.run(command, capture_output=True, text=True, shell=shell)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Command failed: {cmd_msg}\n"
+                f"{error_msg} (exit {result.returncode}):\n"
+                f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+            )
+        return result
+
+    @staticmethod
     def wait_for_clusters_to_start(clusters: list):
         for cluster in clusters:
             cluster.wait_for_cluster_to_start()
@@ -344,15 +360,23 @@ class HBaseDockerClient:
 
     @staticmethod
     def are_containers_running(docker_compose_file=None) -> bool:
+        logger.info("Checking if docker containers are running")
         command = ["docker", "compose"]
         if docker_compose_file:
             command += ["-f", docker_compose_file]
         command += ["ps", "--status", "running", "-q"]
-        result = subprocess.run(command, capture_output=True, text=True)
+        result = HBaseDockerClient.__run_subprocess_command(command, "Failed to get docker container status")
         return bool(result.stdout.strip())
 
     @staticmethod
-    def start_or_restart_containers(docker_compose_file=None):
+    def start_or_restart_containers(docker_compose_file=None, data_store_root=None):
+        if data_store_root:
+            command = ["mkdir", "-p", f"{data_store_root}/data-store/hbase", f"{data_store_root}/data-store/run",
+                       f"{data_store_root}/data-store/logs", f"{data_store_root}/data-store/zk"]
+            HBaseDockerClient.__run_subprocess_command(command, "Failed to make data-store dir and its sub-dirs")
+            command = ["chmod", "-R", "777", f"{data_store_root}/data-store"]
+            HBaseDockerClient.__run_subprocess_command(command, "Failed to give data-store dir full permissions")
+
         if HBaseDockerClient.are_containers_running(docker_compose_file):
             logger.info("Restarting docker containers")
             command = ["docker", "compose"]
@@ -368,13 +392,7 @@ class HBaseDockerClient:
             command += ["up", "-d"]
             action = "start"
 
-        logger.info(f"Running: {' '.join(command)}")
-        result = subprocess.run(command, capture_output=True, text=True)
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"docker compose {action} failed (exit {result.returncode}):\n"
-                f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"
-            )
+        HBaseDockerClient.__run_subprocess_command(command, f"docker compose {action} failed")
         logger.info(f"docker compose {action} completed successfully")
 
     @staticmethod
@@ -389,13 +407,7 @@ class HBaseDockerClient:
             command += f" && {rm_cmd} {data_dir}"
             log_msg += f" and deleting HBase data root dir at: {data_dir}"
         logger.info(f"{log_msg}")
-        logger.info(f"Running: '{command}'")
-        result = subprocess.run(command, capture_output=True, text=True, shell=True)
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"stop_containers failed (exit {result.returncode}):\n"
-                f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"
-            )
+        HBaseDockerClient.__run_subprocess_command(command, "stop_containers failed", shell=True)
         logger.info("Successfully stopped docker containers")
 
     @staticmethod
