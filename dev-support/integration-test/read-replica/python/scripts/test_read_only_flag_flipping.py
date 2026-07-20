@@ -1,9 +1,28 @@
 #!/usr/bin/env python3
-import argparse
-import os
-import time
+"""
+This test starts with two Read-Replica HBase clusters, where one cluster is the active cluster and the other cluster is
+the replica cluster. The test creates a table on the active cluster, adds data to the cluster, and verifies this data
+is consistent on the replica cluster after refreshing the meta HFiles. It also verifies write operations cannot be
+performed on the replica cluster. Then, the two clusters swap roles, where the active cluster becomes a replica and the
+former replica becomes the new active cluster. The previous steps then repeat in an iterative fashion.
 
-import python.proto.generated.ActiveClusterSuffix_pb2 as acs
+This test script verifies behavior for multiple bug fixes:
+
+1. HBASE-30090: Table on replica cluster not refreshing after flipping read-only flag twice
+   https://issues.apache.org/jira/browse/HBASE-30090
+
+   Before implementing this fix, an existing table on a read-replica cluster was not getting updated after making that
+   cluster the active cluster and then making it read-only again.
+
+2. HBASE-30180: Can still add data to read-only region after flipping read-only flag multiple times
+   https://issues.apache.org/jira/browse/HBASE-30180
+
+   Before implementing this fix, this cluster setup and series of steps would eventually get to a scenario where data
+   could be added to a table on cluster with read-only mode disabled.
+"""
+import argparse
+
+from python.src.utils import assert_correct_active_cluster_suffix
 
 from dotenv import load_dotenv
 from python.src.environment_loader import get_env
@@ -75,41 +94,6 @@ def flip_read_only_flag(new_active_cluster: HBaseDockerClient,
     new_active_cluster.disable_read_only_mode()
 
 
-def assert_correct_active_cluster_suffix(cluster: HBaseDockerClient, data_store_root: str):
-    logger.info(f"Verifying active cluster suffix file matches 'hbase.meta.table.suffix' "
-                f"in conf file for {cluster.name}")
-    active_cluster_file = f'{data_store_root}/data-store/hbase/active.cluster.suffix.id'
-    active_cluster_suffix = acs.ActiveClusterSuffix()
-
-    # The active cluster suffix file may not get created right away
-    retries = 0
-    while not os.path.exists(active_cluster_file):
-        if retries >= 5:
-            raise RuntimeError(f"Timed out waiting for active cluster file to exist: {active_cluster_file}")
-        logger.info(f"Waiting for active cluster file to exist: {active_cluster_file}")
-        time.sleep(1)
-        retries += 1
-
-    # Parse the active cluster suffix protobuf message file
-    with open(active_cluster_file, 'rb') as f:
-        data = f.read()
-        header = b'PBUF'
-        if data.startswith(header):
-            active_cluster_suffix.ParseFromString(data[len(header):])
-        else:
-            active_cluster_suffix.ParseFromString(data)
-        actual_suffix = active_cluster_suffix.suffix
-
-    # Assume the meta table suffix is blank if hbase.meta.table.suffix does not exist in HBase conf
-    expected_suffix = cluster.get_hbase_conf_property_value('hbase.meta.table.suffix')
-    if expected_suffix is None:
-        expected_suffix = ''
-
-    # Verify the active cluster suffix file has the expected meta table suffix
-    assert actual_suffix == expected_suffix, (f"Expected {cluster.name} to have meta table suffix '{expected_suffix}', "
-                                              f"but got '{actual_suffix}' instead")
-
-
 def create_table_and_test_clusters_then_flip_read_only_flag(cluster1, cluster2, data_store_root):
     create_table_and_test_active_and_replica_clusters(active_cluster=cluster1, replica_cluster=cluster2)
     flip_read_only_flag(new_active_cluster=cluster2, new_replica_cluster=cluster1)
@@ -118,7 +102,8 @@ def create_table_and_test_clusters_then_flip_read_only_flag(cluster1, cluster2, 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-s', '--skip-container-start-or-restart', action='store_true')
+    parser.add_argument('-s', '--skip-container-start-or-restart', action='store_true',
+                        help='Skip stopping, starting, and waiting for the Docker containers to be ready')
     args = parser.parse_args()
 
     if args.skip_container_start_or_restart:
@@ -150,8 +135,8 @@ if __name__ == '__main__':
                                                       data_store_root=f'{data_store_root}')
         HBaseDockerClient.wait_for_clusters_to_start([cluster1, cluster2])
 
-    test_iterations = 1
-    read_only_flag_flips_per_iteration = 4
+    test_iterations = 3
+    read_only_flag_flips_per_iteration = 6
     for i in range(1, test_iterations + 1):
         logger.info(f"---------- Iteration {i} ----------")
         if i > 1:
