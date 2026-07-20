@@ -119,6 +119,10 @@ jobs:
         run: |
           python3 python/scripts/test_read_only_flag_flipping.py --skip-container-start-or-restart
 
+      - name: Test Cannot Promote Replica to Second Active Cluster
+        run: |
+          python3 python/scripts/test_cannot_promote_second_active_cluster.py --skip-container-start-or-restart
+
       - name: Clean up
         run: docker compose -f docker-compose.yml down
 
