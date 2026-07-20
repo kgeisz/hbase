@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
+import argparse
+
 from dotenv import load_dotenv
 from python.src.environment_loader import get_env
 from python.src.hbase_docker_client import HBaseDockerClient, HBaseShellCommandError
 from python.src.logger_config import get_logger
+from python.src.utils import add_common_args
 
 logger = get_logger(__name__)
 
@@ -31,7 +34,7 @@ def test_table_creation_behavior(active_cluster, replica_cluster, table_name, co
     replica_cluster.assert_table_exists(table_name)
     active_cluster.assert_table_exists(table_name)
 
-    # Cannot drop the table on the Read-Replica cluster. A DoNotRetryIOException should occur
+    # Cannot drop the table on the Read-Replica cluster. A WriteAttemptedOnReadOnlyClusterException should occur
     replica_cluster.disable_table(table_name)
     replica_cluster.assert_read_only_error_occurs('drop', table_name, column_family)
     # The table should still exist on the read-replica cluster since drops are not allowed
@@ -54,35 +57,11 @@ def test_table_creation_behavior(active_cluster, replica_cluster, table_name, co
     replica_cluster.assert_table_does_not_exist(table_name)
 
 
-def verify_invalid_read_only_command_occurs(replica_cluster, cmd_type, table_name, column_family):
-    """
-    Runs a 'create' or 'drop' command on the read-replica cluster and expects an error to occur
-    as a result.
-    """
-    logger.info(f"Verifying {replica_cluster.name} cannot {cmd_type} '{table_name}' since it is in "
-                f"read-only mode")
-    try:
-        # This should throw an exception
-        if cmd_type.lower() == 'create':
-            replica_cluster.create_table(table_name, column_family)
-        elif cmd_type.lower() == 'drop':
-            replica_cluster.drop_table(table_name)
-
-        # If we get here, then the table was dropped on the read-replica cluster, which should
-        # not have happened.
-        raise RuntimeError(f"Expected {cmd_type} table attempt '{table_name}' on "
-                           f"{replica_cluster.name} to result in an error")
-    except HBaseShellCommandError as e:
-        expected_error = ("org.apache.hadoop.hbase.DoNotRetryIOException: "
-                          "Operation not allowed in Read-Only Mode")
-        assert expected_error in str(e), (f"Expected exception to contain the following: "
-                                          f"{expected_error}\n"
-                                          f"The actual exception was:\n{e}")
-    logger.info(f"{cmd_type.capitalize()} table attempt on {replica_cluster.name} "
-                f"failed as expected")
-
-
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser = add_common_args(parser)
+    args = parser.parse_args()
+
     # Load settings from .env file
     load_dotenv()
     container_name = get_env("HBASE_CONTAINER_NAME")
@@ -98,10 +77,11 @@ if __name__ == "__main__":
                                         hbase_ui_port=get_env('REPLICA_CLUSTER_PORT'),
                                         cluster_name="Read-Replica Cluster")
     try:
-        # Delete any lingering tables
-        logger.info(f"Checking if table '{table_name}' already exists on {active_cluster.name} "
-                    f"and dropping it if necessary")
-        HBaseDockerClient.clean_up_tables(active_cluster, replica_cluster)
+        if not args.skip_table_cleanup_on_start:
+            # Delete any lingering tables
+            logger.info(f"Checking if table '{table_name}' already exists on {active_cluster.name} "
+                        f"and dropping it if necessary")
+            HBaseDockerClient.clean_up_tables(active_cluster, replica_cluster)
 
         test_table_creation_behavior(active_cluster, replica_cluster, table_name, column_family)
     except (RuntimeError, HBaseShellCommandError, KeyboardInterrupt) as e:

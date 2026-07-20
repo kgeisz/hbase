@@ -109,11 +109,11 @@ jobs:
           python3 python/scripts/verify_hbase_start.py
           echo "Clusters are up!"
 
-      # - name: Test Table Create/Drop Behavior
-      #   run: python3 python/scripts/test_create_drop_behavior.py
+      - name: Test Table Create/Drop Behavior
+        run: python3 python/scripts/test_create_drop_behavior.py --skip-table-cleanup-on-start
 
-      # - name: Test Put/Get Behavior
-      #   run: python3 python/scripts/test_put_get_behavior.py
+      - name: Test Put/Get Behavior
+        run: python3 python/scripts/test_put_get_behavior.py --skip-table-cleanup-on-start
 
       - name: Test Read-Only Flag Flipping
         run: |

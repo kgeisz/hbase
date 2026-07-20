@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 
+import argparse
+
 from python.src.hbase_docker_client import HBaseDockerClient
+
+
+def add_common_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    parser.add_argument('-t', '--skip-table-cleanup-on-start', action='store_true',
+                        help='Skip cleaning up tables at the start of the test')
+    return parser
 
 
 def run_put_and_get(cluster: HBaseDockerClient, table: str, row: str, cf: str, data: str):
