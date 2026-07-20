@@ -81,16 +81,6 @@ jobs:
              python/proto
           python3 python/proto/proto_compiler.py
 
-      - name: Prepare Host Data Directory
-        run: |
-          # Create the data-store directory at /home/runner/work/_temp
-          echo "HBASE_DATA_STORE_ROOT = ${HBASE_DATA_STORE_ROOT}"
-          mkdir -p ${HBASE_DATA_STORE_ROOT}/data-store/hbase ${HBASE_DATA_STORE_ROOT}/data-store/run \
-                   ${HBASE_DATA_STORE_ROOT}/data-store/logs ${HBASE_DATA_STORE_ROOT}/data-store/zk
-          chmod -R 777 ${HBASE_DATA_STORE_ROOT}
-          # Change ownership to UID 1000 (matches 'hbase' user in Dockerfile)
-          # sudo chown -R 1000:1000 ${HBASE_DATA_STORE_ROOT}/data-store
-
       # - name: Build Docker Image
       #   run: |
       #     echo "Building docker image"
@@ -101,6 +91,16 @@ jobs:
       - name: Verify Can't Start Two Active Clusters at Once
         run: |
           python3 python/scripts/test_dual_active_cluster_startup.py --clean-up-containers
+
+      - name: Prepare Host Data Directory
+        run: |
+          # Create the data-store directory at /home/runner/work/_temp
+          echo "HBASE_DATA_STORE_ROOT = ${HBASE_DATA_STORE_ROOT}"
+          mkdir -p ${HBASE_DATA_STORE_ROOT}/data-store/hbase ${HBASE_DATA_STORE_ROOT}/data-store/run \
+                   ${HBASE_DATA_STORE_ROOT}/data-store/logs ${HBASE_DATA_STORE_ROOT}/data-store/zk
+          chmod -R 777 ${HBASE_DATA_STORE_ROOT}
+          # Change ownership to UID 1000 (matches 'hbase' user in Dockerfile)
+          # sudo chown -R 1000:1000 ${HBASE_DATA_STORE_ROOT}/data-store
 
       - name: Properly Start HBase Docker Containers
         run: |
