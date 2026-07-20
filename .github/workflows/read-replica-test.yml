@@ -113,16 +113,7 @@ jobs:
 
       - name: Test Read-Only Flag Flipping
         run: |
-          echo "Who am I?"
-          whoami
-          echo ""
-          echo "Listing ${HBASE_DATA_STORE_ROOT}"
-          ls -la "${HBASE_DATA_STORE_ROOT}"
-          echo ""
-          echo "Listing ${HBASE_DATA_STORE_ROOT}/data-store"
-          ls -la "${HBASE_DATA_STORE_ROOT}/data-store"
-          echo ""
-          python3 python/scripts/test_read_only_flag_flipping.py
+          python3 python/scripts/test_read_only_flag_flipping.py --skip-container-start-or-restart
 
       - name: Clean up
         run: docker compose -f docker-compose.yml down
