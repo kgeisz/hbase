@@ -1,10 +1,26 @@
+#!/usr/bin/env python3
+"""
+Verifies a cluster cannot be promoted to an active cluster when another active cluster already exists.
+
+The test starts with two Read-Replica HBase clusters, where one cluster is the active cluster and the other cluster is
+the replica cluster. The test tries to promote the replica cluster to a second active cluster and expects an error to
+occur. It then verifies this "second active cluster" is still in read-only mode and that data can still be added to the
+actual active cluster.
+
+This test script verifies the fix for:
+
+HBASE-30220: A replica cluster can have read-only mode disabled even when another active cluster already exists
+https://issues.apache.org/jira/browse/HBASE-30220
+
+Before implementing the fix for HBASE-30220, a cluster could be promoted to from a replica cluster to an active cluster
+even when another active cluster already existed.
+"""
 from dotenv import load_dotenv
 from python.src.environment_loader import get_env
 from python.src.hbase_docker_client import HBaseDockerClient, DockerExecCommandError
 from python.src.logger_config import get_logger
-from python.scripts.test_read_only_flag_flipping import (create_table_and_test_active_and_replica_clusters,
-                                                         assert_correct_active_cluster_suffix)
-from python.src.utils import assert_crud_operations_work_on_active_cluster
+from python.scripts.test_read_only_flag_flipping import create_table_and_test_active_and_replica_clusters
+from python.src.utils import assert_crud_operations_work_on_active_cluster, assert_correct_active_cluster_suffix
 from time import sleep
 
 logger = get_logger(__name__)
@@ -61,7 +77,7 @@ if __name__ == '__main__':
                                  hbase_ui_port=get_env('REPLICA_CLUSTER_PORT'),
                                  cluster_name="Cluster 2")
 
-    HBaseDockerClient.stop_containers(docker_compose_file=docker_compose_file, data_dir=f'{data_store_root}/data-store/*', sudo=True)
+    HBaseDockerClient.stop_containers(docker_compose_file=docker_compose_file, data_dir=f'{data_store_root}/*', sudo=True)
     cluster1.disable_read_only_mode(run_update_all_config=False)
     cluster2.enable_read_only_mode(run_update_all_config=False)
     HBaseDockerClient.start_or_restart_containers(docker_compose_file=docker_compose_file,
