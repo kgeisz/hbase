@@ -71,6 +71,7 @@ jobs:
         run: |
           echo "Current dir: $(pwd)"
           echo "PYTHONPATH=$(pwd)" >> ${GITHUB_ENV}
+          echo "PYTHONPATH = ${PYTHONPATH}"
 
       - name: Compile Protobuf
         run: |
@@ -97,9 +98,12 @@ jobs:
       #     echo "Listing Docker images"
       #     docker image ls
 
+      - name: Verify Can't Start Two Active Clusters at Once
+        run: |
+          python3 python/scripts/test_dual_active_cluster_startup.py --clean-up-containers
+
       - name: Start HBase Docker Containers
         run: |
-          echo "PYTHONPATH = ${PYTHONPATH}"
           docker compose -f docker-compose.yml up -d
           echo "Waiting for HBase clusters to initialize..."
           python3 python/scripts/verify_hbase_start.py
