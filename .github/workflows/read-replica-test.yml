@@ -34,6 +34,7 @@ jobs:
 
           # Filter out comments, grab the keys, and write the expanded values to GITHUB_ENV
           grep -E "^[A-Za-z0-9_]+=" .env | cut -d= -f1 | while read -r key; do
+            echo "$key=${!key}"
             echo "$key=${!key}" >> $GITHUB_ENV
           done
 
