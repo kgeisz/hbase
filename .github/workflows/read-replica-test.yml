@@ -66,12 +66,12 @@ jobs:
              python/proto
           python3 python/proto/proto_compiler.py
 
-      # - name: Build Docker Image
-      #   run: |
-      #     echo "Building docker image"
-      #     ./build-images.sh
-      #     echo "Listing Docker images"
-      #     docker image ls
+      - name: Build Docker Image
+        run: |
+          echo "Building docker image"
+          ./build-images.sh
+          echo "Listing Docker images"
+          docker image ls
 
       - name: Verify Can't Start Two Active Clusters at Once
         run: |
