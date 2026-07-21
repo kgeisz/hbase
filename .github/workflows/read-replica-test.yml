@@ -55,8 +55,8 @@ jobs:
       - name: Set Python Path
         run: |
           echo "Current dir: $(pwd)"
+          echo "Setting PYTHONPATH=$(pwd) for GITHUB_ENV ${GITHUB_ENV}"
           echo "PYTHONPATH=$(pwd)" >> ${GITHUB_ENV}
-          echo "PYTHONPATH = ${PYTHONPATH}"
 
       - name: Compile Protobuf
         run: |

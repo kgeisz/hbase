@@ -22,9 +22,9 @@ This test script verifies behavior for multiple bug fixes:
 """
 import argparse
 
-from python.src.utils import assert_correct_active_cluster_suffix, add_common_skip_container_stop_or_restart_arg
+from python.src.utils import (assert_correct_active_cluster_suffix, add_common_skip_container_stop_or_restart_arg,
+                              reset_cluster_setup, load_env_and_set_up_clients)
 
-from dotenv import load_dotenv
 from python.src.environment_loader import get_env
 from python.src.hbase_docker_client import HBaseDockerClient
 from python.src.logger_config import get_logger
@@ -105,32 +105,20 @@ if __name__ == '__main__':
     parser = add_common_skip_container_stop_or_restart_arg(parser)
     args = parser.parse_args()
 
-    if args.skip_container_start_or_restart:
+    skip_container_restart = args.skip_container_start_or_restart
+
+    if skip_container_restart:
         logger.info("Docker containers will NOT be started/restarted at the beginning of this test run")
     else:
         logger.info("Docker containers will be started/restarted at the beginning of this test run")
 
-    # Load settings from .env file
-    load_dotenv()
-    container_name = get_env("HBASE_CONTAINER_NAME")
+    cluster1, cluster2 = load_env_and_set_up_clients()
     data_store_root = get_env("HBASE_DATA_STORE_ROOT")
     docker_compose_file = get_env("DOCKER_COMPOSE_FILE")
 
-    cluster1 = HBaseDockerClient(container_name=container_name,
-                                 local_conf=f"{get_env('ACTIVE_CLUSTER_CONF_DIR')}/hbase-site.xml",
-                                 hbase_ui_port=get_env('ACTIVE_CLUSTER_PORT'),
-                                 cluster_name="Cluster 1")
-    cluster2 = HBaseDockerClient(container_name=f'{container_name}-2',
-                                 local_conf=f"{get_env('REPLICA_CLUSTER_CONF_DIR')}/hbase-site.xml",
-                                 hbase_ui_port=get_env('REPLICA_CLUSTER_PORT'),
-                                 cluster_name="Cluster 2")
-
-    if not args.skip_container_start_or_restart:
-        HBaseDockerClient.stop_containers(docker_compose_file=docker_compose_file, data_dir=f'{data_store_root}/*',
-                                          sudo=True)
-
-    cluster1.disable_read_only_mode(run_update_all_config=False)
-    cluster2.enable_read_only_mode(run_update_all_config=False)
+    reset_cluster_setup(active_cluster=cluster1, replica_cluster=cluster2,
+                        skip_container_restart=skip_container_restart, docker_compose_file=docker_compose_file,
+                        data_store_root=data_store_root)
 
     if not args.skip_container_start_or_restart:
         HBaseDockerClient.start_or_restart_containers(docker_compose_file=docker_compose_file,
