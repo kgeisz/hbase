@@ -18,11 +18,11 @@ jobs:
       - name: Checkout HBase Repository
         uses: actions/checkout@v4
 
-      - name: Checkout HBASE-29081 Read-Replica Feature Branch
+      - name: Checkout master Branch
         uses: actions/checkout@v4
         with: 
-          # If it's a PR, then use the PR's head SHA. Otherwise, use HBASE-29081.
-          ref: ${{ github.event.pull_request.head.sha || 'HBASE-29081' }}
+          # If it's a PR, then use the PR's head SHA. Otherwise, use master.
+          ref: ${{ github.event.pull_request.head.sha || 'master' }}
           path: ${{ env.REPLICA_BASE_DIR }}/hbase
 
       - name: Load .env File into GitHub Actions Environment
