@@ -1,12 +1,44 @@
-# Check if the correct number of arguments are provided
-if [ "$#" -ne 2 ]; then
-  echo "Usage: $0 <table_name> <column_family>"
-  exit 1
-fi
+#!/usr/bin/env bash
 
+usage() {
+  echo "Usage: $0 <table_name> <column_family> [-n|--num-rows NUM_ROWS] [-i|--initial-row-value INITIAL_ROW_VALUE]"
+  exit 1
+}
+
+if [ "$#" -lt 2 ]; then
+  usage
+fi
 
 TABLE_NAME=$1
 COLUMN_FAMILY=$2
+shift 2
+
+NUM_ROWS=""
+INITIAL_ROW_VALUE=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -n|--num-rows)
+      NUM_ROWS="$2"
+      shift 2
+      ;;
+    -i|--initial-row-value)
+      INITIAL_ROW_VALUE="$2"
+      shift 2
+      ;;
+    *)
+      usage
+      ;;
+  esac
+done
+
+TSV_GENERATOR_ARGS=""
+if [ -n "$NUM_ROWS" ]; then
+  TSV_GENERATOR_ARGS="$TSV_GENERATOR_ARGS -n $NUM_ROWS"
+fi
+if [ -n "$INITIAL_ROW_VALUE" ]; then
+  TSV_GENERATOR_ARGS="$TSV_GENERATOR_ARGS -i $INITIAL_ROW_VALUE"
+fi
 
 # Clean up any existing bulkload directories
 rm -rf /tmp/bulkload
@@ -15,7 +47,7 @@ rm -rf /tmp/bulkload
 mkdir -p /tmp/bulkload/tsvdata
 
 # Generate TSV data and save to the specified directory
-python3 tsv_generator.py /tmp/bulkload/tsvdata
+python3 /opt/utils/tsv_generator.py /tmp/bulkload/tsvdata $TSV_GENERATOR_ARGS
 
 # Import TSV data to create HFiles for bulk loading
 hbase org.apache.hadoop.hbase.mapreduce.ImportTsv \
