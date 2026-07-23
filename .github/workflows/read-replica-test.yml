@@ -108,9 +108,9 @@ jobs:
         run: |
           python3 python/scripts/test_cannot_promote_second_active_cluster.py --skip-container-start-or-restart
 
-      - name: Test Bulkloaded Data
+      - name: Test Bulkloaded Data and Region Splitting
         run: |
-          python3 python/scripts/test_cannot_promote_second_active_cluster.py --skip-container-start-or-restart
+          python3 python/scripts/test_bulkloaded_data_and_region_splits.py --skip-container-start-or-restart
 
       - name: Clean up
         run: docker compose -f docker-compose.yml down

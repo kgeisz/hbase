@@ -159,6 +159,11 @@ class HBaseDockerClient:
         match = re.search(pattern, output)
         return ast.literal_eval(match.group(0))
 
+    def list_regions(self, table_name):
+        """Gets list of regions and their info for the provided table"""
+        logger.info(f"Getting list of regions for table '{table_name}'")
+        return self.run_hbase_shell_command(f"list_regions '{table_name}'")
+
     def put(self, table_name, row, column, data, spec_map=None):
         """
         Performs an HBase put command.
@@ -215,12 +220,72 @@ class HBaseDockerClient:
         logger.debug(f"Flushing table '{table_name}'")
         self.run_hbase_shell_command(f"flush '{table_name}'")
 
+    def split(self, thing_to_split, split_key=None):
+        """
+        Flushes the table and triggers an asynchronous region split. Split the entire table or pass a region to split an
+        individual region. With the second parameter, you can specify an explicit split key for the region.
+
+        thing_to_split - TABLENAME, REGIONNAME, or ENCODED_REGIONNAME
+        split_key      - where to have the region split
+        """
+        logger.info(f"Flushing and triggering split on table '{thing_to_split}' on {self.name}")
+        self.flush(thing_to_split)
+
+        split_cmd = f"split '{thing_to_split}'"
+        if split_key:
+            split_cmd += f", '{split_key}'"
+
+        self.run_hbase_shell_command(split_cmd)
+
+    def major_compact(self, table_or_region, column_family=None, mob=None):
+        log_msg = f"Running major_compact on '{table_or_region}'"
+        command = f"major_compact '{table_or_region}'"
+
+        if column_family:
+            log_msg += f" for column family '{column_family}'"
+            command += f", '{column_family}'"
+
+        if mob and column_family:
+            log_msg += " with MOB"
+            command += f", 'MOB'"
+        elif mob and not column_family:
+            log_msg += " with MOB"
+            command += ", nil, 'MOB'"
+
+        self.run_hbase_shell_command(command)
+
+    def major_compact_and_wait(self, table_or_region, column_family=None, mob=None, timeout=30, sleep_time=1):
+        """Triggers major compaction on a table and blocks until it completes."""
+        logger.info(f"Triggering major compaction on '{table_or_region}' on {self.name}...")
+        self.major_compact(table_or_region, column_family, mob)
+
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            output = self.run_hbase_shell_command(f"compaction_state '{table_or_region}'")
+
+            # When all regions finish compacting, compaction_state returns NONE
+            if "NONE" in output:
+                logger.info(f"SUCCESS: Major compaction completed for '{table_or_region}'.")
+                return True
+
+            logger.debug(f"Compaction still in progress for '{table_or_region}'... waiting {sleep_time}s")
+            time.sleep(sleep_time)
+
+        raise RuntimeError(
+            f"TIMEOUT: Major compaction on table '{table_or_region}' failed to complete within {timeout} seconds."
+        )
+
+    def catalogjanitor_run(self):
+        """Forces the CatalogJanitor to immediately clean up split parent regions in hbase:meta."""
+        logger.info(f"Running catalogjanitor_run on {self.name}")
+        self.run_hbase_shell_command("catalogjanitor_run")
+
     def refresh_meta(self):
-        logger.debug(f"Refreshing meta on {self.name}")
+        logger.info(f"Refreshing meta on {self.name}")
         self.run_hbase_shell_command("refresh_meta")
 
     def refresh_hfiles(self):
-        logger.debug(f"Refreshing HFiles on {self.name}")
+        logger.info(f"Refreshing HFiles on {self.name}")
         self.run_hbase_shell_command("refresh_hfiles")
 
     def enable_read_only_mode(self, run_update_all_config=True):
@@ -316,12 +381,12 @@ class HBaseDockerClient:
         logger.info(f"{cmd_type.capitalize()} attempt on {self.name} failed as expected")
 
     def assert_table_does_not_exist(self, table_name):
-        logger.debug(f"Verifying '{table_name}' is not in the list of tables on {self.name}")
+        logger.info(f"Verifying '{table_name}' is not in the list of tables on {self.name}")
         assert table_name not in self.list_tables(), \
             f"Expected table '{table_name}' to not exist on {self.name}"
 
     def assert_table_exists(self, table_name):
-        logger.debug(f"Verifying '{table_name}' is in the list of tables on {self.name}")
+        logger.info(f"Verifying '{table_name}' is in the list of tables on {self.name}")
         assert table_name in self.list_tables(), \
             f"Expected table '{table_name}' to exist on {self.name}"
 
@@ -333,6 +398,15 @@ class HBaseDockerClient:
         assert actual_row_count == expected_row_count, \
             (f"Expected table '{table_name}' on {self.name} to have {expected_row_count} row(s). "
              f"Instead got {actual_row_count}")
+
+    def assert_region_count_for_table(self, table_name, expected_region_count):
+        logger.info(f"Verifying table '{table_name}' has {expected_region_count} region(s)")
+        output = self.list_regions(table_name)
+        match = re.search(r'^ (\d+) rows$', output, re.MULTILINE)
+        actual_region_count = int(match.group(1)) if match else None
+        assert actual_region_count == expected_region_count, \
+            (f"Expected table '{table_name}' on {self.name} to have {expected_region_count} region(s). "
+             f"Instead got {actual_region_count}")
 
     @staticmethod
     def __run_subprocess_command(command, error_msg, shell=False):
