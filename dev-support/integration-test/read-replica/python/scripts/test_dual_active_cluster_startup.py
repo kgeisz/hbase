@@ -45,7 +45,7 @@ def assert_error_in_master_log(cluster: HBaseDockerClient):
     logger.info(f"  [PASS] Found expected error message in {cluster.name}'s master log")
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--clean-up-containers', action='store_true',
                         help='Stop Docker containers and revert cluster configurations to one '
@@ -63,7 +63,7 @@ if __name__ == '__main__':
         HBaseDockerClient.stop_containers(docker_compose_file=docker_compose_file, data_dir=f'{data_store_root}/*',
                                           sudo=True)
 
-        # Set both clusters to active mode (read-only disabled)
+        # Make both clusters an active cluster (read-only disabled)
         cluster1.disable_read_only_mode(run_update_all_config=False)
         cluster2.disable_read_only_mode(run_update_all_config=False)
 
@@ -91,7 +91,9 @@ if __name__ == '__main__':
         else:
             raise RuntimeError(
                 "Both clusters appear to be running — the test expects exactly one to have failed. "
-                "This may indicate the clusters are using separate data stores or the feature is not working."
+                "This may indicate the clusters are using separate data stores or the feature is not working. "
+                "Note: There is a rare occasion where this may occur due to a race condition, but it should "
+                "not happen often."
             )
 
         logger.info(f"[PASS] {running_cluster.name} is running as the active cluster")
@@ -113,3 +115,7 @@ if __name__ == '__main__':
                                           sudo=True)
         cluster1.disable_read_only_mode(run_update_all_config=False)
         cluster2.enable_read_only_mode(run_update_all_config=False)
+
+
+if __name__ == '__main__':
+    main()

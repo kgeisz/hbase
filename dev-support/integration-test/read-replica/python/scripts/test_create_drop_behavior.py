@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
+"""
+Tests table creation behavior for read-replica clusters. It creates a table on the active
+cluster, and then runs refresh_meta on the replica cluster and verifies the table's existence.
+It does a similar process when dropping the table on the active cluster. It also verifies
+tables cannot be created/dropped on the replica cluster.
+"""
 import argparse
 
-from python.src.hbase_docker_client import HBaseDockerClient, HBaseShellCommandError
+from python.src.hbase_docker_client import HBaseDockerClient
 from python.src.logger_config import get_logger
 from python.src.utils import add_common_skip_table_cleanup_arg, load_env_and_set_up_clients
 
@@ -9,12 +15,6 @@ logger = get_logger(__name__)
 
 
 def test_table_creation_behavior(active_cluster, replica_cluster, table_name, column_family):
-    """
-    Tests table creation behavior for read-replica clusters. It creates a table on the active
-    cluster, and then runs refresh_meta on the replica cluster and verifies the table's existence.
-    It does a similar process when dropping the table on the active cluster. It also verifies
-    tables cannot be created/dropped on the replica cluster.
-    """
     # We should not be able to create a new table on the read-replica cluster
     replica_cluster.assert_read_only_error_occurs('create', table_name, column_family)
 
@@ -55,7 +55,7 @@ def test_table_creation_behavior(active_cluster, replica_cluster, table_name, co
     replica_cluster.assert_table_does_not_exist(table_name)
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser = add_common_skip_table_cleanup_arg(parser)
     args = parser.parse_args()
@@ -64,15 +64,14 @@ if __name__ == "__main__":
                                                                   cluster2_name="Read-Replica Cluster")
     table_name = "t1"
     column_family = "cf"
-    try:
-        if not args.skip_table_cleanup_on_start:
-            # Delete any lingering tables
-            logger.info(f"Checking if table '{table_name}' already exists on {active_cluster.name} "
-                        f"and dropping it if necessary")
-            HBaseDockerClient.clean_up_tables(active_cluster, replica_cluster)
-
-        test_table_creation_behavior(active_cluster, replica_cluster, table_name, column_family)
-    except (RuntimeError, HBaseShellCommandError, KeyboardInterrupt) as e:
-        logger.error(f"An error occurred:\n{e}")
-        logger.info("Cleaning up any tables that may be remaining")
+    if not args.skip_table_cleanup_on_start:
+        # Delete any lingering tables
+        logger.info(f"Checking if table '{table_name}' already exists on {active_cluster.name} "
+                    f"and dropping it if necessary")
         HBaseDockerClient.clean_up_tables(active_cluster, replica_cluster)
+
+    test_table_creation_behavior(active_cluster, replica_cluster, table_name, column_family)
+
+
+if __name__ == "__main__":
+    main()
