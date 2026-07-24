@@ -30,11 +30,11 @@ jobs:
 
       - name: Show Working Directory
         run: |
-          echo "Current dir: $(pwd)"
-          echo "Current dir contents (note there is now an HBase repo here):"
+          echo "The current and default working directory is: $(pwd)"
+          echo "Directory contents (note there is now an HBase repo here):"
           ls -la
           echo "Showing recent commits in this HBase repo"
-          cd hbase && git log --oneline | head
+          cd hbase && git log --oneline | head -n5
 
       # - name: Load .env File into GitHub Actions Environment
       #   run: |
