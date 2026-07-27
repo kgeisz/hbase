@@ -95,6 +95,7 @@ public final class TableName implements Comparable<TableName> {
       HConstants.HBASE_META_TABLE_SUFFIX_DEFAULT_VALUE);
     LOG.debug("[Read-replica feature] suffix value: {}",
       (suffix_val == null || suffix_val.isEmpty()) ? "<blank>" : suffix_val);
+    LOG.debug("kevin: This is a test log message");
     if (Strings.isNullOrEmpty(suffix_val)) {
       return valueOf(NamespaceDescriptor.SYSTEM_NAMESPACE_NAME_STR, "meta");
     } else {
