@@ -32,10 +32,8 @@ jobs:
         run: |
           echo "The previous default working directory was: GITHUB_WORKSPACE=${GITHUB_WORKSPACE}"
           echo "The current and default working directory is now: $(pwd)"
-          echo "The working directory now has an HBase repo:"
+          echo "The working directory contents:"
           ls -la
-          echo "Showing the most recent commit in this HBase repo:"
-          cd hbase && git log --oneline | head
 
       - name: Show Other Stuff
         run: |
