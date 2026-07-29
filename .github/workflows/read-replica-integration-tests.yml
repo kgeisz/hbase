@@ -38,14 +38,14 @@ jobs:
       - name: Show Other Stuff
         run: |
           echo "The current directory: $(pwd)"
-          echo "Showing GITHUB_WORKSPACE/hbase"
-          ls -la ${GITHUB_WORKSPACE}/hbase
+          echo "Showing GITHUB_WORKSPACE"
+          ls -la ${GITHUB_WORKSPACE}
           echo ""
-          echo "Showing ${GITHUB_WORKSPACE}/hbase/.github/workflows"
-          ls -la ${GITHUB_WORKSPACE}/hbase/.github/workflows
+          echo "Showing ${GITHUB_WORKSPACE}/.github/workflows"
+          ls -la ${GITHUB_WORKSPACE}/.github/workflows
           echo ""
-          echo "Showing contents of ${GITHUB_WORKSPACE}/hbase/.github/workflows/read-replica-integration-tests.yml"
-          cat ${GITHUB_WORKSPACE}/hbase/.github/workflows/read-replica-integration-tests.yml
+          echo "Showing contents of ${GITHUB_WORKSPACE}/.github/workflows/read-replica-integration-tests.yml"
+          cat ${GITHUB_WORKSPACE}/.github/workflows/read-replica-integration-tests.yml
           echo ""
           echo "Showing Python scripts"
           ls -la ./python/scripts
