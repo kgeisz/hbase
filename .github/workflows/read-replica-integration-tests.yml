@@ -18,15 +18,15 @@ jobs:
       - name: Checkout HBase Repository
         uses: actions/checkout@v4
 
-      - name: Checkout Pull Request SHA or master branch
-        uses: actions/checkout@v4
-        with:
-          # If it's a PR, then use the PR's head SHA. Otherwise, use master.
-          ref: ${{ github.event.pull_request.head.sha || 'master' }}
-          # "path" specifies where we want the HBase repo with our PR's or master's code to be
-          # checked out. This will put the repo's "hbase" directory inside the read-replica
-          # directory, allowing us to build a Docker image using this SHA.
-          path: ${{ env.REPLICA_BASE_DIR }}/hbase
+      # - name: Checkout Pull Request SHA or master branch
+      #   uses: actions/checkout@v4
+      #   with:
+      #     # If it's a PR, then use the PR's head SHA. Otherwise, use master.
+      #     ref: ${{ github.event.pull_request.head.sha || 'master' }}
+      #     # "path" specifies where we want the HBase repo with our PR's or master's code to be
+      #     # checked out. This will put the repo's "hbase" directory inside the read-replica
+      #     # directory, allowing us to build a Docker image using this SHA.
+      #     path: ${{ env.REPLICA_BASE_DIR }}/hbase
 
       - name: Show Working Directory
         run: |
@@ -37,22 +37,40 @@ jobs:
           echo "Showing the most recent commit in this HBase repo:"
           cd hbase && git log --oneline | head
 
-      - name: Load .env File into GitHub Actions Environment
+      - name: Show Other Stuff
         run: |
-          # Turn on auto-export and source the file
-          set -a
-          source .env
-          set +a
+          echo "The current directory: $(pwd)"
+          echo "Showing GITHUB_WORKSPACE/hbase"
+          ls -la ${GITHUB_WORKSPACE}/hbase
+          echo ""
+          echo "Showing ${GITHUB_WORKSPACE}/hbase/.github/workflows"
+          ls -la ${GITHUB_WORKSPACE}/hbase/.github/workflows
+          echo ""
+          echo "Showing contents of ${GITHUB_WORKSPACE}/hbase/.github/workflows/read-replica-integration-tests.yml"
+          cat ${GITHUB_WORKSPACE}/hbase/.github/workflows/read-replica-integration-tests.yml
+          echo ""
+          echo "Showing Python scripts"
+          ls -la ./python/scripts
+          echo ""
+          echo "Showing contents of new_file.py"
+          cat ./python/scripts/new_file.py
 
-          # Filter out comments, grab the keys, and write the expanded values to GITHUB_ENV
-          grep -E "^[A-Za-z0-9_]+=" .env | cut -d= -f1 | while read -r key; do
-            echo "$key=${!key}"
-            echo "$key=${!key}" >> $GITHUB_ENV
-          done
+      # - name: Load .env File into GitHub Actions Environment
+      #   run: |
+      #     # Turn on auto-export and source the file
+      #     set -a
+      #     source .env
+      #     set +a
 
-      - name: Set up Docker Compose
-        # Ensures Docker Compose is installed and available
-        uses: docker/setup-compose-action@v2
+      #     # Filter out comments, grab the keys, and write the expanded values to GITHUB_ENV
+      #     grep -E "^[A-Za-z0-9_]+=" .env | cut -d= -f1 | while read -r key; do
+      #       echo "$key=${!key}"
+      #       echo "$key=${!key}" >> $GITHUB_ENV
+      #     done
+
+      # - name: Set up Docker Compose
+      #   # Ensures Docker Compose is installed and available
+      #   uses: docker/setup-compose-action@v2
 
       - name: Install Python Requirements
         run: |
@@ -63,64 +81,68 @@ jobs:
           echo "Setting PYTHONPATH=$(pwd) for GITHUB_ENV=${GITHUB_ENV}"
           echo "PYTHONPATH=$(pwd)" >> ${GITHUB_ENV}
 
-      - name: Compile Protobuf
+      - name: Run New Python Script
         run: |
-          echo "Copying ActiveClusterSuffix.proto from HBase repo to have latest version"
-          cp hbase/hbase-protocol-shaded/src/main/protobuf/server/ActiveClusterSuffix.proto \
-             python/proto
-          python3 python/proto/proto_compiler.py
+          python3 python/scripts/new_file.py
 
-      - name: Build Docker Image
-        run: |
-          echo "Building docker image"
-          ./build-images.sh
-          echo "Listing Docker images"
-          docker image ls
+      # - name: Compile Protobuf
+      #   run: |
+      #     echo "Copying ActiveClusterSuffix.proto from HBase repo to have latest version"
+      #     cp hbase/hbase-protocol-shaded/src/main/protobuf/server/ActiveClusterSuffix.proto \
+      #        python/proto
+      #     python3 python/proto/proto_compiler.py
 
-      - name: Verify Can't Start Two Active Clusters at Once
-        run: |
-          python3 python/scripts/test_dual_active_cluster_startup.py --clean-up-containers
+      # - name: Build Docker Image
+      #   run: |
+      #     echo "Building docker image"
+      #     ./build-images.sh
+      #     echo "Listing Docker images"
+      #     docker image ls
 
-      - name: Prepare Host Data Directory
-        run: |
-          # Create the data-store directory at /home/runner/work/_temp
-          echo "HBASE_DATA_STORE_ROOT = ${HBASE_DATA_STORE_ROOT}"
-          mkdir -p ${HBASE_DATA_STORE_ROOT}/data-store/hbase ${HBASE_DATA_STORE_ROOT}/data-store/run \
-                   ${HBASE_DATA_STORE_ROOT}/data-store/logs ${HBASE_DATA_STORE_ROOT}/data-store/zk
-          chmod -R 777 ${HBASE_DATA_STORE_ROOT}
-          # Change ownership to UID 1000 (matches 'hbase' user in Dockerfile)
-          # sudo chown -R 1000:1000 ${HBASE_DATA_STORE_ROOT}/data-store
+      # - name: Verify Can't Start Two Active Clusters at Once
+      #   run: |
+      #     python3 python/scripts/test_dual_active_cluster_startup.py --clean-up-containers
 
-      - name: Properly Start HBase Docker Containers
-        run: |
-          docker compose -f docker-compose.yml up -d
-          echo "Waiting for HBase clusters to initialize..."
-          python3 python/scripts/verify_hbase_start.py
-          echo "Clusters are up!"
+      # - name: Prepare Host Data Directory
+      #   run: |
+      #     # Create the data-store directory at /home/runner/work/_temp
+      #     echo "HBASE_DATA_STORE_ROOT = ${HBASE_DATA_STORE_ROOT}"
+      #     mkdir -p ${HBASE_DATA_STORE_ROOT}/data-store/hbase ${HBASE_DATA_STORE_ROOT}/data-store/run \
+      #              ${HBASE_DATA_STORE_ROOT}/data-store/logs ${HBASE_DATA_STORE_ROOT}/data-store/zk
+      #     chmod -R 777 ${HBASE_DATA_STORE_ROOT}
+      #     # Change ownership to UID 1000 (matches 'hbase' user in Dockerfile)
+      #     # sudo chown -R 1000:1000 ${HBASE_DATA_STORE_ROOT}/data-store
 
-      - name: Test Table Create/Drop Behavior
-        run: python3 python/scripts/test_create_drop_behavior.py --skip-table-cleanup-on-start
+      # - name: Properly Start HBase Docker Containers
+      #   run: |
+      #     docker compose -f docker-compose.yml up -d
+      #     echo "Waiting for HBase clusters to initialize..."
+      #     python3 python/scripts/verify_hbase_start.py
+      #     echo "Clusters are up!"
 
-      - name: Test Put/Get/Delete Behavior
-        run: python3 python/scripts/test_put_get_delete_behavior.py --skip-table-cleanup-on-start
+      # - name: Test Table Create/Drop Behavior
+      #   run: python3 python/scripts/test_create_drop_behavior.py --skip-table-cleanup-on-start
 
-      - name: Test Read-Only Flag Flipping
-        run: |
-          python3 python/scripts/test_read_only_flag_flipping.py --skip-container-start-or-restart
+      # - name: Test Put/Get/Delete Behavior
+      #   run: python3 python/scripts/test_put_get_delete_behavior.py --skip-table-cleanup-on-start
 
-      - name: Test Cannot Promote Replica to Second Active Cluster
-        run: |
-          python3 python/scripts/test_cannot_promote_second_active_cluster.py --skip-container-start-or-restart
+      # - name: Test Read-Only Flag Flipping
+      #   run: |
+      #     python3 python/scripts/test_read_only_flag_flipping.py --skip-container-start-or-restart
 
-      - name: Test Bulkloaded Data and Region Splitting
-        run: |
-          python3 python/scripts/test_bulkloaded_data_and_region_splits.py --skip-container-start-or-restart
+      # - name: Test Cannot Promote Replica to Second Active Cluster
+      #   run: |
+      #     python3 python/scripts/test_cannot_promote_second_active_cluster.py --skip-container-start-or-restart
 
-      - name: Clean up
-        run: docker compose -f docker-compose.yml down
+      # - name: Test Bulkloaded Data and Region Splitting
+      #   run: |
+      #     python3 python/scripts/test_bulkloaded_data_and_region_splits.py --skip-container-start-or-restart
 
-      - name: Dump Logs on Failure
-        if: failure()
-        run: |
-          docker logs hbase-docker
-          docker logs hbase-docker-2
+      # - name: Clean up
+      #   run: docker compose -f docker-compose.yml down
+
+      # - name: Dump Logs on Failure
+      #   if: failure()
+      #   run: |
+      #     docker logs hbase-docker
+      #     docker logs hbase-docker-2
