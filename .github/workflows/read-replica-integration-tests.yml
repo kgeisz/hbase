@@ -83,21 +83,10 @@ jobs:
         run: |
           python3 python/scripts/test_dual_active_cluster_startup.py --clean-up-containers
 
-      - name: Prepare Host Data Directory
-        run: |
-          # Create the data-store directory at /home/runner/work/_temp
-          # HBase will fail to start due to permission issues if these directories do not already exist
-          echo "HBASE_DATA_STORE_ROOT = ${HBASE_DATA_STORE_ROOT}"
-          mkdir -p ${HBASE_DATA_STORE_ROOT}/data-store/hbase ${HBASE_DATA_STORE_ROOT}/data-store/run \
-                   ${HBASE_DATA_STORE_ROOT}/data-store/logs ${HBASE_DATA_STORE_ROOT}/data-store/zk
-          chmod -R 777 ${HBASE_DATA_STORE_ROOT}
-
       - name: Properly Start HBase Docker Containers
         run: |
-          docker compose -f docker-compose.yml up -d
-          echo "Waiting for HBase clusters to initialize..."
+          echo "Starting one active and one replica HBase cluster and waiting for them to initialize..."
           python3 python/scripts/verify_hbase_start.py
-          echo "Clusters are up!"
 
       - name: Test Table Create/Drop Behavior
         run: python3 python/scripts/test_create_drop_behavior.py --skip-table-cleanup-on-start
