@@ -514,7 +514,7 @@ class HBaseDockerClient:
 
     @staticmethod
     def stop_containers(docker_compose_file: str | None = None, data_dir: str | None = None,
-                        sudo: bool = True) -> None:
+                        sudo: bool = False) -> None:
         command = "docker compose"
         if docker_compose_file:
             command += f" -f {docker_compose_file}"

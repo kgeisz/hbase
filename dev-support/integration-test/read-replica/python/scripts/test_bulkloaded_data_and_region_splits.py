@@ -87,7 +87,7 @@ def main():
 
     reset_cluster_setup(active_cluster=cluster1, replica_cluster=cluster2,
                         skip_container_restart=skip_container_restart, docker_compose_file=docker_compose_file,
-                        data_store_root=data_store_root)
+                        data_store_root=data_store_root, sudo=True)
 
     logger.info(f"The active cluster is {cluster1.name} and the replica cluster is {cluster2.name}")
 

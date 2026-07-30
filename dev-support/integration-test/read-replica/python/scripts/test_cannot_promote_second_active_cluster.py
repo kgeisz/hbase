@@ -83,7 +83,7 @@ def main():
 
     reset_cluster_setup(active_cluster=cluster1, replica_cluster=cluster2,
                         skip_container_restart=skip_container_restart, docker_compose_file=docker_compose_file,
-                        data_store_root=data_store_root)
+                        data_store_root=data_store_root, sudo=True)
 
     assert_correct_active_cluster_suffix(cluster1, data_store_root)
     clean_up_tables(active_cluster=cluster1, replica_cluster=cluster2)
