@@ -224,6 +224,10 @@ class ConnectionOverAsyncConnection implements Connection {
     return conn.getClusterId();
   }
 
+  public String getClusterIdWithMetaTable() {
+    return conn.getClusterId() + ":" + TableName.META_TABLE_NAME.getQualifierAsString();
+  }
+
   @Override
   public Hbck getHbck() throws IOException {
     return FutureUtils.get(conn.getHbck());
