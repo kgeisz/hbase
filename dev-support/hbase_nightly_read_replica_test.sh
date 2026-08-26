@@ -38,9 +38,6 @@ set -a
 source .env
 set +a
 
-export PYTHONPATH="$(pwd)"
-echo "Set PYTHONPATH=${PYTHONPATH}"
-
 echo "HBASE_IMAGE=${HBASE_IMAGE}"
 echo "ACTIVE_CLUSTER_CONF_DIR=${ACTIVE_CLUSTER_CONF_DIR}"
 echo "REPLICA_CLUSTER_CONF_DIR=${REPLICA_CLUSTER_CONF_DIR}"
@@ -79,9 +76,18 @@ echo "Copying latest version of ActiveClusterSuffix.proto to $(pwd)/python/proto
 cp "${HBASE_ROOT}/hbase-protocol-shaded/src/main/protobuf/server/ActiveClusterSuffix.proto" \
    python/proto/
 
+export PYTHONPATH="$(pwd)"
+echo "Set PYTHONPATH=${PYTHONPATH}"
+
+# Create Python environment
+echo "Creating Python environment: .venv"
+python3 -m venv .venv
+source .venv/bin/activate
+
 # Install Python dependencies
 echo "Installing Python libraries"
-python3 -m pip install --user -q -r requirements.txt
+pip install --upgrade pip
+pip install -r requirements.txt
 
 # Compile protobuf
 echo "Compiling Protobuf"
