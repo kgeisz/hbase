@@ -74,7 +74,7 @@ def main():
 
     reset_cluster_setup(active_cluster=cluster1, replica_cluster=cluster2,
                         skip_container_restart=skip_container_restart, docker_compose_file=docker_compose_file,
-                        data_store_root=data_store_root, sudo=True)
+                        data_store_root=data_store_root)
 
     if not args.skip_container_start_or_restart:
         HBaseDockerClient.start_or_restart_containers(docker_compose_file=docker_compose_file,
