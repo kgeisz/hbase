@@ -43,6 +43,7 @@ echo "ACTIVE_CLUSTER_CONF_DIR=${ACTIVE_CLUSTER_CONF_DIR}"
 echo "REPLICA_CLUSTER_CONF_DIR=${REPLICA_CLUSTER_CONF_DIR}"
 echo "DOCKER_COMPOSE_FILE=${DOCKER_COMPOSE_FILE}"
 echo "HBASE_DATA_STORE_ROOT=${HBASE_DATA_STORE_ROOT}"
+echo "realpath of HBASE_DATA_STORE_ROOT=$(realpath ${HBASE_DATA_STORE_ROOT})"
 
 # Clone HBase source for Docker build context (Docker COPY doesn't follow symlinks)
 echo "Cloning HBase source into ${REPLICA_DIR}/hbase for Docker build context..."
