@@ -56,18 +56,13 @@ rm -rf "${REPLICA_DIR}/hbase/.git"
 cleanup() {
   local exit_code=$?
   if [ ${exit_code} -ne 0 ]; then
-    echo "=== FAILURE: Dumping Docker container logs ==="
-    if [ -n "${OUTPUT_DIR}" ] && [ -d "${OUTPUT_DIR}" ]; then
-      docker logs "${HBASE_CONTAINER_NAME}"   2>&1 | tee "${OUTPUT_DIR}/hbase-docker.log" || true
-      docker logs "${HBASE_CONTAINER_NAME}-2" 2>&1 | tee "${OUTPUT_DIR}/hbase-docker-2.log" || true
-    else
-      docker logs "${HBASE_CONTAINER_NAME}"   2>&1 || true
-      docker logs "${HBASE_CONTAINER_NAME}-2" 2>&1 || true
-    fi
+    echo "=== FAILURE ==="
+    echo "An error occurred during this stage in the Jenkins run."
+    echo "The HBase logs have been copied to: ${OUTPUT_DIR}"
   fi
   echo "=== Cleanup: Copying HBase logs to ${OUTPUT_DIR} ==="
-  cp "${ACTIVE_CLUSTER_LOGS_DIR}/*"  "${OUTPUT_DIR}"
-  cp "${REPLICA_CLUSTER_LOGS_DIR}/*" "${OUTPUT_DIR}"
+  cp -r "${ACTIVE_CLUSTER_LOGS_DIR}"  "${OUTPUT_DIR}/active-cluster-hbase-logs"  || true
+  cp -r "${REPLICA_CLUSTER_LOGS_DIR}" "${OUTPUT_DIR}/replica-cluster-hbase-logs" || true
   echo "=== Cleanup: Stopping Docker containers ==="
   docker compose -f "${DOCKER_COMPOSE_FILE}" down 2>/dev/null || true
   echo "=== Cleanup: Removing Docker image: ${HBASE_IMAGE} ==="
