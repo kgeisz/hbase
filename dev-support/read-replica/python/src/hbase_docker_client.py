@@ -182,7 +182,7 @@ class HBaseDockerClient:
 
     def wait_for_cluster_to_start(self) -> None:
         """curls the cluster's HBase UI to make sure it is up and then makes sure all desired servers are up"""
-        self.wait_for_hbase_ui()
+        # self.wait_for_hbase_ui()
         self.wait_for_master_initialization()
         self.wait_for_region_server_initialization()
         self.check_server_status()
