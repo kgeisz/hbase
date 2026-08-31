@@ -58,11 +58,12 @@ cleanup() {
   if [ ${exit_code} -ne 0 ]; then
     echo "=== FAILURE ==="
     echo "An error occurred during this stage in the Jenkins run."
-    echo "The HBase logs have been copied to: ${OUTPUT_DIR}"
+    echo "The HBase logs will be copied to: ${OUTPUT_DIR}"
   fi
   echo "=== Cleanup: Copying HBase logs to ${OUTPUT_DIR} ==="
-  cp -r "${ACTIVE_CLUSTER_LOGS_DIR}"  "${OUTPUT_DIR}/active-cluster-hbase-logs"  || true
-  cp -r "${REPLICA_CLUSTER_LOGS_DIR}" "${OUTPUT_DIR}/replica-cluster-hbase-logs" || true
+  mkdir -p ${OUTPUT_DIR}/hbase-docker-logs ${OUTPUT_DIR}/hbase-docker-2-logs || true
+  cp -r ${ACTIVE_CLUSTER_LOGS_DIR}/*log   ${OUTPUT_DIR}/hbase-docker-logs    || true
+  cp -r ${REPLICA_CLUSTER_LOGS_DIR}/*log  ${OUTPUT_DIR}/hbase-docker-2-logs  || true
   echo "=== Cleanup: Stopping Docker containers ==="
   docker compose -f "${DOCKER_COMPOSE_FILE}" down 2>/dev/null || true
   echo "=== Cleanup: Removing Docker image: ${HBASE_IMAGE} ==="
