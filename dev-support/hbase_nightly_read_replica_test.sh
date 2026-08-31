@@ -40,12 +40,15 @@ set +a
 
 echo "HBASE_IMAGE=${HBASE_IMAGE}"
 echo "ACTIVE_CLUSTER_CONF_DIR=${ACTIVE_CLUSTER_CONF_DIR}"
-echo "ACTIVE_CLUSTER_LOGS_DIR=${ACTIVE_CLUSTER_LOGS_DIR}"
 echo "REPLICA_CLUSTER_CONF_DIR=${REPLICA_CLUSTER_CONF_DIR}"
-echo "REPLICA_CLUSTER_LOGS_DIR=${REPLICA_CLUSTER_LOGS_DIR}"
 echo "DOCKER_COMPOSE_FILE=${DOCKER_COMPOSE_FILE}"
 echo "HBASE_DATA_STORE_ROOT=${HBASE_DATA_STORE_ROOT}"
 echo "realpath of HBASE_DATA_STORE_ROOT=$(realpath ${HBASE_DATA_STORE_ROOT})"
+
+echo "Removing HBase log directories from mounted volumes that may exist from a previous test run:"
+echo "ACTIVE_CLUSTER_LOGS_DIR=${ACTIVE_CLUSTER_LOGS_DIR}"
+echo "REPLICA_CLUSTER_LOGS_DIR=${REPLICA_CLUSTER_LOGS_DIR}"
+rm -rf ${ACTIVE_CLUSTER_LOGS_DIR} ${REPLICA_CLUSTER_LOGS_DIR}
 
 # Clone HBase source for Docker build context (Docker COPY doesn't follow symlinks)
 echo "Cloning HBase source into ${REPLICA_DIR}/hbase for Docker build context..."
@@ -109,4 +112,4 @@ python3 python/scripts/test_read_only_flag_flipping.py --skip-container-start-or
 python3 python/scripts/test_cannot_promote_second_active_cluster.py --skip-container-start-or-restart
 python3 python/scripts/test_bulkloaded_data_and_region_splits.py --skip-container-start-or-restart
 
-echo "All read-replica integration tests passed."
+echo "=== Success: All read-replica integration tests passed. ==="
