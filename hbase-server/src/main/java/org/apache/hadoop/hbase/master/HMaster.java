@@ -4563,8 +4563,12 @@ public class HMaster extends HBaseServerBase<MasterRpcServices> implements Maste
       .areReadOnlyCoprocessorsLoaded(this.conf, CoprocessorHost.MASTER_COPROCESSOR_CONF_KEY);
 
     if (maybeUpdatedReadOnlyMode != originalIsReadOnlyEnabled) {
-      AbstractReadOnlyController.manageActiveClusterIdFile(maybeUpdatedReadOnlyMode,
-        this.getMasterFileSystem());
+      try {
+        AbstractReadOnlyController.manageActiveClusterIdFile(maybeUpdatedReadOnlyMode,
+          this.getMasterFileSystem());
+      } catch (IOException e) {
+        abort("Failed to manage active cluster ID file during configuration change", e);
+      }
     }
   }
 

@@ -95,7 +95,8 @@ public abstract class AbstractReadOnlyController implements Coprocessor {
     }
   }
 
-  public static void manageActiveClusterIdFile(boolean readOnlyEnabled, MasterFileSystem mfs) {
+  public static void manageActiveClusterIdFile(boolean readOnlyEnabled, MasterFileSystem mfs)
+    throws IOException {
     FileSystem fs = mfs.getFileSystem();
     Path rootDir = mfs.getRootDir();
     Path activeClusterFile = new Path(rootDir, HConstants.ACTIVE_CLUSTER_SUFFIX_FILE_NAME);
@@ -144,22 +145,20 @@ public abstract class AbstractReadOnlyController implements Coprocessor {
               LOG.debug("Active cluster file already exists at {} and belongs to this cluster. "
                 + "No need to create it again.", activeClusterFile);
             } else {
-              LOG.error(
-                "Active cluster file at {} belongs to a different cluster. "
-                  + "ID from active cluster file: {}, ID of this cluster: {}. "
-                  + "Another cluster is already the active cluster.",
-                activeClusterFile, existingData, localData);
+              throw new IOException(
+                "Active cluster file at " + activeClusterFile + " belongs to a different cluster. "
+                  + "ID from active cluster file: " + existingData + ", ID of this cluster: "
+                  + localData + ". Another cluster is already the active cluster.");
             }
           } catch (DeserializationException e) {
-            LOG.error("Failed to deserialize ActiveClusterSuffix from file {}", activeClusterFile,
-              e);
+            throw new IOException(
+              "Failed to deserialize ActiveClusterSuffix from file " + activeClusterFile, e);
           }
         }
       }
     } catch (IOException e) {
-      // We still update the flag, but log that the operation failed.
-      LOG.error("Failed to perform file operation for read-only switch. "
-        + "Flag will be updated, but file system state may be inconsistent.", e);
+      LOG.error("Active cluster file operation failed: {}", e.getMessage(), e);
+      throw e;
     }
   }
 }

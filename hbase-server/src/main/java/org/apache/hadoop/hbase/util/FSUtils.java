@@ -27,6 +27,7 @@ import java.io.EOFException;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.util.UUID;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
@@ -56,6 +57,7 @@ import java.util.regex.Pattern;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
+import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
@@ -654,10 +656,9 @@ public final class FSUtils {
     final Path rootdir, final String fileName, final T cs, final long wait) throws IOException {
     final Path idFile = new Path(rootdir, fileName);
     final Path tempDir = new Path(rootdir, HConstants.HBASE_TEMP_DIRECTORY);
-    final Path tempIdFile = new Path(tempDir, fileName);
 
     LOG.debug("Cluster file [{}] is present and contains cluster id: {}", idFile, cs);
-    writeClusterInfo(fs, rootdir, idFile, tempIdFile, cs.toByteArray(), wait);
+    writeClusterInfo(fs, rootdir, idFile, tempDir, fileName, cs.toByteArray(), wait);
   }
 
   /**
@@ -666,11 +667,17 @@ public final class FSUtils {
    * cluster suffix in "active_cluster_suffix.id" file. If any operations on the ID file fails, and
    * {@code wait} is a positive value, the method will retry to produce the ID file until the thread
    * is forcibly interrupted.
+   * @throws FileAlreadyExistsException if the target file was created by another writer during the
+   *                                    rename attempt
    */
   private static void writeClusterInfo(final FileSystem fs, final Path rootdir, final Path idFile,
-    final Path tempIdFile, byte[] fileData, final long wait) throws IOException {
+    final Path tempDir, final String fileName, byte[] fileData, final long wait)
+    throws IOException {
     while (true) {
       Optional<IOException> failure = Optional.empty();
+      // Use a unique temp file per attempt to prevent concurrent writers from corrupting
+      // each other's temp content (e.g., two clusters starting simultaneously).
+      final Path tempIdFile = new Path(tempDir, fileName + "." + UUID.randomUUID());
 
       LOG.debug("Write the file to a temporary location: {}", tempIdFile);
       try (FSDataOutputStream s = fs.create(tempIdFile)) {
@@ -684,14 +691,23 @@ public final class FSUtils {
           LOG.debug("Move the temporary file to its target location [{}]:[{}]", tempIdFile, idFile);
 
           if (!fs.rename(tempIdFile, idFile)) {
+            if (fs.exists(idFile)) {
+              // Target was created by another writer. Clean up and signal the caller.
+              deleteQuietly(fs, tempIdFile);
+              throw new FileAlreadyExistsException(
+                "Target file already exists (created by another writer): " + idFile);
+            }
             failure = Optional.of(new IOException("Unable to move temp file to " + idFile));
           }
+        } catch (FileAlreadyExistsException e) {
+          throw e;
         } catch (IOException ioe) {
           failure = Optional.of(ioe);
         }
       }
 
       if (failure.isPresent()) {
+        deleteQuietly(fs, tempIdFile);
         final IOException cause = failure.get();
         if (wait > 0L) {
           LOG.warn("Unable to create file in {}, retrying in {}ms", rootdir, wait, cause);
@@ -708,6 +724,14 @@ public final class FSUtils {
       } else {
         return;
       }
+    }
+  }
+
+  private static void deleteQuietly(FileSystem fs, Path path) {
+    try {
+      fs.delete(path, false);
+    } catch (IOException e) {
+      LOG.debug("Failed to clean up temp file: {}", path, e);
     }
   }
 

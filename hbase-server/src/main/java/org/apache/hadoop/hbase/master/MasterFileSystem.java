@@ -20,6 +20,7 @@ package org.apache.hadoop.hbase.master;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -425,8 +426,34 @@ public class MasterFileSystem {
           activeClusterSuffix);
       } catch (FileNotFoundException fnfe) {
         // We're in read/write mode, but suffix file missing, let's create it
-        FSUtils.setClusterIdFile(fs, rootdir, HConstants.ACTIVE_CLUSTER_SUFFIX_FILE_NAME,
-          activeClusterSuffix, wait);
+        try {
+          FSUtils.setClusterIdFile(fs, rootdir, HConstants.ACTIVE_CLUSTER_SUFFIX_FILE_NAME,
+            activeClusterSuffix, wait);
+        } catch (FileAlreadyExistsException e) {
+          // Another cluster created the file during our write attempt.
+          ActiveClusterSuffix existing =
+            FSUtils.getClusterIdFile(fs, rootdir, new ActiveClusterSuffix.Parser());
+          if (existing != null && !this.activeClusterSuffix.equals(existing)) {
+            throw new IOException(
+              "Cannot start master, because another cluster claimed active status "
+                + "on this storage location. Active Cluster Id: " + existing + ", This cluster Id: "
+                + activeClusterSuffix,
+              e);
+          }
+          LOG.info("[Read-replica feature] Active cluster suffix file already created by this "
+            + "cluster: {}", activeClusterSuffix);
+          return;
+        }
+        // Verify the file we just wrote actually contains our data. On local filesystems,
+        // a concurrent rename can silently overwrite our file with another cluster's data.
+        ActiveClusterSuffix written =
+          FSUtils.getClusterIdFile(fs, rootdir, new ActiveClusterSuffix.Parser());
+        if (written == null || !this.activeClusterSuffix.equals(written)) {
+          throw new IOException(
+            "[Read-replica feature] Race condition detected: active cluster suffix file "
+              + "was overwritten by another cluster. File content: " + written + ", Expected: "
+              + activeClusterSuffix);
+        }
         LOG.info("[Read-replica feature] Created Active cluster suffix file: {}, with content: {}",
           HConstants.ACTIVE_CLUSTER_SUFFIX_FILE_NAME, activeClusterSuffix);
       }
