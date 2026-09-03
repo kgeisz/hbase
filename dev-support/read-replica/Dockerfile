@@ -6,10 +6,10 @@ USER 0
 
 # Install necessary packages for building Maven dependencies
 RUN microdnf update -y && microdnf install -y \
-        maven \
-        git \
-        hostname \
-        diffutils \
+        maven-1:3.8.5-6.module+el8.10.0+21301+657f54a3.noarch \
+        git-2.43.7-1.el8_10.aarch64 \
+        hostname-3.20-6.el8.aarch64 \
+        diffutils-3.6-6.el8.aarch64 \
     && microdnf clean all
 
 # Copy the entire source code to cache dependencies
@@ -31,10 +31,10 @@ USER 0
 
 # Install necessary build packages
 RUN microdnf update -y && microdnf install -y \
-        maven \
-        git \
-        hostname \
-        diffutils \
+        maven-1:3.8.5-6.module+el8.10.0+21301+657f54a3.noarch \
+        git-2.43.7-1.el8_10.aarch64 \
+        hostname-3.20-6.el8.aarch64 \
+        diffutils-3.6-6.el8.aarch64 \
     && microdnf clean all
 
 # Copy the cached Maven dependencies
@@ -68,17 +68,19 @@ ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk \
 
 # Install necessary runtime packages
 RUN microdnf update -y && microdnf install -y \
-        unzip \
-        gzip \
-        wget \
-        hostname \
-        maven \
-        git \
-        diffutils \
-        vim \
-        openssh-clients \
-        python3 \
-        procps \
+        unzip-6.0-48.el8_10.aarch64 \
+        gzip-1.9-13.el8_5.aarch64 \
+        wget-1.19.5-12.el8_10.aarch64 \
+        hostname-3.20-6.el8.aarch64 \
+        maven-1:3.8.5-6.module+el8.10.0+21301+657f54a3.noarch \
+        git-2.43.7-1.el8_10.aarch64 \
+        diffutils-3.6-6.el8.aarch64 \
+        vim-common-2:8.0.1763-31.el8_10.aarch64 \
+        vim-enhanced-2:8.0.1763-31.el8_10.aarch64 \
+        vim-filesystem-2:8.0.1763-31.el8_10.noarch \
+        openssh-clients-8.0p1-30.el8_10.aarch64 \
+        python36-3.6.8-39.module+el8.10.0+20784+edafcd43.aarch64 \
+        procps-ng-3.3.15-14.el8.aarch64 \
     && microdnf clean all
 
 # Copy the built HBase binaries from the build-stage
