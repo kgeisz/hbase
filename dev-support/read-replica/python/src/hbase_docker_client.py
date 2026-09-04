@@ -126,11 +126,11 @@ class HBaseDockerClient:
         last_exception = None
         for attempt in range(1, self._max_retries + 1):
             try:
-                response = requests.get(url)
+                response = requests.get(url, timeout=self._sleep_time)
                 if response.status_code == 200:
                     logger.info(f"SUCCESS: {self._cluster_name} UI is up.")
                     return True
-            except requests.exceptions.ConnectionError as e:
+            except requests.exceptions.RequestException as e:
                 last_exception = e
             logging.info(f"Waiting {self._sleep_time} seconds before requesting HBase UI again")
             time.sleep(self._sleep_time)
