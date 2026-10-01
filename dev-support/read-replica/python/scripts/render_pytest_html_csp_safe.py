@@ -16,7 +16,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
-"""Materialize pytest-html 4.x report rows as static HTML.
+"""
+Materialize pytest-html 4.x report rows as static HTML.
 
 pytest-html v4 stores results in data-jsonblob and builds the results table with
 JavaScript. Jenkins (and other hosts with strict Content-Security-Policy) block
@@ -33,6 +34,7 @@ import sys
 from pathlib import Path
 
 CSP_STATIC_MARKER = "<!-- read-replica-csp-static-rows -->"
+_EXPAND_RESULTS = frozenset({"failed", "error", "xpassed"})
 
 
 def _format_environment_value(value: object) -> str:
@@ -55,11 +57,13 @@ def _build_test_tbodies(tests: dict) -> str:
             log = entry.get("log") or ""
             extras_row = ""
             if log:
-                log_html = html.escape(log).replace("\n", "<br/>\n")
+                log_html = html.escape(html.unescape(log), quote=False)
+                open_attr = " open" if result in _EXPAND_RESULTS else ""
                 extras_row = (
                     '<tr class="extras-row"><td class="extra" colspan="4">'
-                    '<div class="logwrapper"><div class="log">'
-                    f"{log_html}</div></div></td></tr>"
+                    f'<details{open_attr}><summary>Log Output</summary>'
+                    f'<pre>{log_html}</pre>'
+                    '</details></td></tr>'
                 )
             chunks.append(
                 f'<tbody class="results-table-row {result}" id="{safe_test_id}">'
