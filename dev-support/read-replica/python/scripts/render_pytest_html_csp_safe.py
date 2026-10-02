@@ -35,6 +35,15 @@ from pathlib import Path
 
 CSP_STATIC_MARKER = "<!-- read-replica-csp-static-rows -->"
 _EXPAND_RESULTS = frozenset({"failed", "error", "xpassed"})
+_RESULT_COLORS = {
+    "passed": "green",
+    "failed": "red",
+    "error": "red",
+    "xpassed": "red",
+    "skipped": "orange",
+    "xfailed": "orange",
+    "rerun": "orange",
+}
 
 
 def _format_environment_value(value: object) -> str:
@@ -53,6 +62,14 @@ def _build_test_tbodies(tests: dict) -> str:
         for entry in entries:
             row_cells = "".join(entry.get("resultsTableRow", []))
             result = str(entry.get("result", "Unknown")).lower()
+            color = _RESULT_COLORS.get(result)
+            if color:
+                row_cells = re.sub(
+                    r'(class="col-result">)([^<]*)',
+                    rf'\1<font color="{color}">\2</font>',
+                    row_cells,
+                    count=1,
+                )
             safe_test_id = html.escape(test_id, quote=True)
             log = entry.get("log") or ""
             extras_row = ""
@@ -72,6 +89,42 @@ def _build_test_tbodies(tests: dict) -> str:
     return "\n".join(chunks)
 
 
+def _build_overall_header(tests: dict) -> str:
+    """Return a Yetus-style '+1 overall' or '-1 overall' HTML header."""
+    has_failure = any(
+        str(entry.get("result", "")).lower() in _EXPAND_RESULTS
+        for entries in tests.values()
+        for entry in entries
+    )
+    if has_failure:
+        color, vote = "red", "-1"
+    else:
+        color, vote = "green", "+1"
+    return f'<h1><font color="{color}">{vote} overall</font></h1>'
+
+
+_SUMMARY_SPAN_COLORS = {
+    "passed": "green",
+    "failed": "red",
+    "error": "red",
+    "skipped": "orange",
+    "xfailed": "orange",
+    "xpassed": "red",
+    "rerun": "orange",
+}
+
+
+def _colorize_summary_spans(text: str) -> str:
+    """Wrap summary count span contents in <font> tags for CSP-blocked envs."""
+    for cls, color in _SUMMARY_SPAN_COLORS.items():
+        text = re.sub(
+            rf'(<span class="{cls}">)([^<]*)(</span>)',
+            rf'\1<font color="{color}">\2</font>\3',
+            text,
+        )
+    return text
+
+
 def materialize(report_path: Path) -> None:
     text = report_path.read_text(encoding="utf-8")
     if CSP_STATIC_MARKER in text:
@@ -89,6 +142,7 @@ def materialize(report_path: Path) -> None:
     tests = data.get("tests", {})
     environment = data.get("environment", {})
 
+    overall_header = _build_overall_header(tests)
     tbodies = _build_test_tbodies(tests)
     env_rows = "".join(
         f"<tr><td>{html.escape(str(key))}</td><td>{_format_environment_value(val)}</td></tr>"
@@ -111,6 +165,14 @@ def materialize(report_path: Path) -> None:
         f"<table id=\"environment\">\n{env_rows}\n</table>",
         1,
     )
+
+    text = text.replace(
+        '<h1 id="title">',
+        overall_header + '\n    <h1 id="title">',
+        1,
+    )
+
+    text = _colorize_summary_spans(text)
 
     report_path.write_text(text, encoding="utf-8")
 
