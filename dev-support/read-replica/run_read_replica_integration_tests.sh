@@ -304,6 +304,7 @@ echo "Pytest wall time: ${PYTEST_SEC}s ($(format_duration_hms "${PYTEST_SEC}"))"
 # pytest-html 4.x renders the results table via JavaScript; Jenkins CSP blocks inline
 # scripts on archived/publishHTML reports, leaving an empty table unless we materialize rows.
 echo "Materializing static HTML rows for Jenkins CSP-safe viewing..."
+cp "${OUTPUT_DIR}/read-replica-nightly-test-report.html" "${OUTPUT_DIR}/orig.read-replica-nightly-test-report.html"
 python3 python/scripts/render_pytest_html_csp_safe.py \
   "${OUTPUT_DIR}/read-replica-nightly-test-report.html"
 
