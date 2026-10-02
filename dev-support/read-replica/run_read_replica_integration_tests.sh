@@ -46,7 +46,8 @@ print_timing_summary() {
   fi
   TIMING_SUMMARY_PRINTED=true
 
-  local total_sec=$((SECONDS - OVERALL_START_SEC))
+  local total_sec=$(( SECONDS - OVERALL_START_SEC + DEV_SUPPORT_IMAGE_BUILD_SEC ))
+  local dev_image_sec="${DEV_SUPPORT_IMAGE_BUILD_SEC}"
   local rsync_sec="${RSYNC_SEC:--}"
   local mvn_clean_sec="${MVN_CLEAN_SEC:--}"
   local docker_build_sec="${DOCKER_BUILD_SEC:--}"
@@ -55,35 +56,41 @@ print_timing_summary() {
 
   echo ""
   echo "=== Read-replica run timing summary ==="
+  if [ "${dev_image_sec}" -gt 0 ] 2>/dev/null; then
+    printf "  1. Test-env image build (host):               %6ss (%s)\n" \
+      "${dev_image_sec}" "$(format_duration_hms "${dev_image_sec}")"
+  else
+    echo "  1. Test-env image build (host):                  N/A (dev mode)"
+  fi
   if [ "${rsync_sec}" != "-" ]; then
-    printf "  1. Rsync source staging (read-replica/hbase): %6ss (%s)\n" \
+    printf "  2. Rsync source staging (read-replica/hbase): %6ss (%s)\n" \
       "${rsync_sec}" "$(format_duration_hms "${rsync_sec}")"
   else
-    echo "  1. Rsync source staging:                         (not run)"
+    echo "  2. Rsync source staging:                         (not run)"
   fi
   if [ "${mvn_clean_sec}" != "-" ]; then
-    printf "  2. Maven clean (pre-Docker):                  %6ss (%s)\n" \
+    printf "  3. Maven clean (pre-Docker):                  %6ss (%s)\n" \
       "${mvn_clean_sec}" "$(format_duration_hms "${mvn_clean_sec}")"
   else
-    echo "  2. Maven clean (pre-Docker):                     (not run)"
+    echo "  3. Maven clean (pre-Docker):                     (not run)"
   fi
   if [ "${docker_build_sec}" != "-" ]; then
-    printf "  3. Docker image build (incl. Maven in image): %6ss (%s)\n" \
+    printf "  4. Docker image build (incl. Maven in image): %6ss (%s)\n" \
       "${docker_build_sec}" "$(format_duration_hms "${docker_build_sec}")"
   else
-    echo "  3. Docker image build:                           (not run)"
+    echo "  4. Docker image build:                           (not run)"
   fi
   if [ "${build_images_sec}" != "-" ]; then
-    printf "     build-images.sh total (2+3):              %6ss (%s)\n" \
+    printf "     build-images.sh total (3+4):              %6ss (%s)\n" \
       "${build_images_sec}" "$(format_duration_hms "${build_images_sec}")"
   fi
   if [ "${pytest_sec}" != "-" ]; then
-    printf "  4. Pytest integration suite:                %6ss (%s)\n" \
+    printf "  5. Pytest integration suite:                 %6ss (%s)\n" \
       "${pytest_sec}" "$(format_duration_hms "${pytest_sec}")"
   else
-    echo "  4. Pytest integration suite:                     (not run)"
+    echo "  5. Pytest integration suite:                     (not run)"
   fi
-  printf "  5. Total wall time (this script):             %6ss (%s)\n" \
+  printf "  6. Total wall time:                           %6ss (%s)\n" \
     "${total_sec}" "$(format_duration_hms "${total_sec}")"
   echo "========================================"
 }
@@ -96,6 +103,7 @@ export HBASE_IMAGE="hbase-read-replica:${BUILD_NUMBER:-local}"
 
 OVERALL_START_SEC=${SECONDS}
 TIMING_SUMMARY_PRINTED=false
+DEV_SUPPORT_IMAGE_BUILD_SEC="${DEV_SUPPORT_IMAGE_BUILD_SEC:-0}"
 RSYNC_SEC=""
 MVN_CLEAN_SEC=""
 DOCKER_BUILD_SEC=""
