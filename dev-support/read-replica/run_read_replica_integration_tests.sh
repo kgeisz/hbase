@@ -298,6 +298,7 @@ fi
 
 echo "Starting read-replica integration test suite via Pytest..."
 PYTEST_START=${SECONDS}
+PYTEST_EXIT_CODE=0
 pytest -o log_cli=true --log-cli-level=INFO \
        --log-cli-format='%(asctime)s %(levelname)-5s %(module)s.%(funcName)s(%(lineno)d): %(message)s' \
        --log-cli-date-format='%Y-%m-%d %H:%M:%S' \
@@ -305,7 +306,7 @@ pytest -o log_cli=true --log-cli-level=INFO \
        --self-contained-html \
        --junitxml="${OUTPUT_DIR}/read-replica-nightly-test-results.xml" \
        python/test/test_read_replica_feature.py \
-       "${PYTEST_K_ARGS[@]}"
+       "${PYTEST_K_ARGS[@]}" || PYTEST_EXIT_CODE=$?
 PYTEST_SEC=$((SECONDS - PYTEST_START))
 echo "Pytest wall time: ${PYTEST_SEC}s ($(format_duration_hms "${PYTEST_SEC}"))"
 
@@ -316,5 +317,28 @@ cp "${OUTPUT_DIR}/read-replica-nightly-test-report.html" "${OUTPUT_DIR}/orig.rea
 python3 python/scripts/render_pytest_html_csp_safe.py \
   "${OUTPUT_DIR}/read-replica-nightly-test-report.html"
 
+# Write comprehensive timing file for the console report generator.
+TOTAL_SEC=$(( SECONDS - OVERALL_START_SEC + DEV_SUPPORT_IMAGE_BUILD_SEC ))
+cat > "${OUTPUT_DIR}/read-replica-all-timing.env" <<EOF
+DEV_SUPPORT_IMAGE_BUILD_SEC=${DEV_SUPPORT_IMAGE_BUILD_SEC}
+RSYNC_SEC=${RSYNC_SEC}
+MVN_CLEAN_SEC=${MVN_CLEAN_SEC}
+DOCKER_BUILD_SEC=${DOCKER_BUILD_SEC}
+PYTEST_SEC=${PYTEST_SEC}
+TOTAL_SEC=${TOTAL_SEC}
+EOF
+
+# Generate Yetus-style console report with per-stage vote/runtime/status.
+echo "Generating console report..."
+python3 python/scripts/render_console_report.py \
+  --timing "${OUTPUT_DIR}/read-replica-all-timing.env" \
+  --junit "${OUTPUT_DIR}/read-replica-nightly-test-results.xml" \
+  --output "${OUTPUT_DIR}/read-replica-console-report.html"
+
 print_timing_summary
+
+if [ ${PYTEST_EXIT_CODE} -ne 0 ]; then
+  echo "=== FAILURE: One or more read-replica integration tests failed. ==="
+  exit ${PYTEST_EXIT_CODE}
+fi
 echo "=== Success: All read-replica integration tests passed. ==="
