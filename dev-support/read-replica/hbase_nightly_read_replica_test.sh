@@ -214,6 +214,7 @@ else
     -v "${M2_DIR}/.m2:/root/.m2" \
     -e OUTPUT_DIR="${EFFECTIVE_OUTPUT_DIR}" \
     -e BUILD_NUMBER="${BUILD_NUMBER:-local}" \
+    -e DEV_SUPPORT_IMAGE_BUILD_SEC="${DEV_SUPPORT_IMAGE_BUILD_SEC}" \
     -w "${REPLICA_DIR}" \
     "${DEV_IMAGE_NAME}" \
     ./run_read_replica_integration_tests.sh "${JAVA_VERSION_ARGS[@]}" "${PYTEST_K_ARGS[@]}"
