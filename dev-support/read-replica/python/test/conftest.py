@@ -35,12 +35,8 @@ def per_test_log_file(request):
     log_dir = os.path.join(output_dir, test_name)
     os.makedirs(log_dir, exist_ok=True)
 
-    execution_count = getattr(request.node, 'execution_count', 0)
-    if execution_count > 0:
-        filename = f"{test_name}.rerun{execution_count}"
-    else:
-        filename = test_name
-    log_path = os.path.join(log_dir, f"{filename}.log")
+    execution_count = getattr(request.node, 'execution_count', 1)
+    log_path = os.path.join(log_dir, f"{test_name}.run{execution_count}.log")
 
     handler = logging.FileHandler(log_path, mode='w')
     handler.setFormatter(logging.Formatter(LOG_FORMAT))
