@@ -72,8 +72,10 @@ def per_test_log_file(request):
     if active_logs_dir and os.path.isdir(active_logs_dir):
         shutil.copytree(active_logs_dir,
                         os.path.join(run_dir, f"hbase-cluster1-run{execution_count}-logs"),
-                        dirs_exist_ok=True)
+                        dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns('*.out'))
     if replica_logs_dir and os.path.isdir(replica_logs_dir):
         shutil.copytree(replica_logs_dir,
                         os.path.join(run_dir, f"hbase-cluster2-run{execution_count}-logs"),
-                        dirs_exist_ok=True)
+                        dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns('*.out'))
