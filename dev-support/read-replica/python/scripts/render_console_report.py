@@ -29,7 +29,6 @@ from __future__ import annotations
 import argparse
 import sys
 import xml.etree.ElementTree as ET
-from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -39,6 +38,7 @@ class TestResult:
     name: str
     time_sec: float
     passed: bool
+    rerun_count: int = 0
 
 
 def parse_timing_env(path: Path) -> dict[str, int]:
@@ -73,12 +73,23 @@ def parse_junit_xml(path: Path) -> list[TestResult]:
         has_failure = tc.find("failure") is not None or tc.find("error") is not None
         testcases.append((name, time_sec, not has_failure))
 
-    # Group by name; use the last entry (handles pytest-rerunfailures)
-    seen: OrderedDict[str, TestResult] = OrderedDict()
+    seen_order: list[str] = []
+    entries: dict[str, list[tuple[float, bool]]] = {}
     for name, time_sec, passed in testcases:
-        seen[name] = TestResult(name=name, time_sec=time_sec, passed=passed)
+        if name not in entries:
+            seen_order.append(name)
+            entries[name] = []
+        entries[name].append((time_sec, passed))
 
-    return list(seen.values())
+    results: list[TestResult] = []
+    for name in seen_order:
+        runs = entries[name]
+        total_time = sum(t for t, _ in runs)
+        final_passed = runs[-1][1]
+        rerun_count = len(runs) - 1
+        results.append(TestResult(name=name, time_sec=total_time,
+                                  passed=final_passed, rerun_count=rerun_count))
+    return results
 
 
 def format_runtime(total_sec: int | float) -> str:
@@ -117,16 +128,51 @@ def _infra_row(subsystem: str, seconds: int, comment: str) -> str:
     return _row("0", "blue", subsystem, format_runtime(seconds), "", comment)
 
 
-def _test_row(result: TestResult, logs_url: str,
-              output_dir: Path) -> str:
-    if result.passed:
+def _detail_row(color: str, log: str, comment: str) -> str:
+    return (
+        "<tr>\n"
+        "\t\t<td></td>\n"
+        "\t\t<td></td>\n"
+        "\t\t<td></td>\n"
+        f"<td>{log}</td>\n"
+        f'<td><font color="{color}"> {comment} </font></td>\n'
+        "</tr>\n"
+    )
+
+
+def _pytest_rows(test_results: list[TestResult], timing: dict[str, int],
+                 logs_url: str, output_dir: Path) -> list[str]:
+    rows: list[str] = []
+
+    passed_count = sum(1 for t in test_results if t.passed)
+    failed_count = sum(1 for t in test_results if not t.passed)
+    total_reruns = sum(t.rerun_count for t in test_results)
+
+    all_passed = failed_count == 0
+
+    if all_passed:
         vote, color = "+1", "green"
-        comment = f"passed {result.name}"
     else:
         vote, color = "-1", "red"
-        comment = f"failed {result.name}"
-    log = _log_link(result.name, color, logs_url, output_dir)
-    return _row(vote, color, "pytest", format_runtime(result.time_sec), log, comment)
+
+    pytest_sec = timing.get("PYTEST_SEC", 0)
+    if pytest_sec == 0:
+        pytest_sec = int(round(sum(t.time_sec for t in test_results)))
+
+    comment = f"{passed_count} passed, {failed_count} failed, {total_reruns} rerun(s)"
+    rows.append(_row(vote, color, "pytest", format_runtime(pytest_sec), "", comment))
+
+    for t in test_results:
+        if not t.passed:
+            log = _log_link(t.name, "red", logs_url, output_dir)
+            rows.append(_detail_row("red", log, f"failed {t.name}"))
+
+    for t in test_results:
+        if t.passed and t.rerun_count > 0:
+            log = _log_link(t.name, "yellow", logs_url, output_dir)
+            rows.append(_detail_row("yellow", log, f"rerun {t.name}"))
+
+    return rows
 
 
 def _total_row(total_sec: int) -> str:
@@ -187,8 +233,7 @@ def build_console_report(timing: dict[str, int],
         rows.append(_infra_row(subsystem, seconds, comment))
 
     effective_output_dir = output_dir if output_dir is not None else Path()
-    for result in test_results:
-        rows.append(_test_row(result, logs_url, effective_output_dir))
+    rows.extend(_pytest_rows(test_results, timing, logs_url, effective_output_dir))
 
     total_sec = timing.get("TOTAL_SEC", 0)
     rows.append(_total_row(total_sec))
