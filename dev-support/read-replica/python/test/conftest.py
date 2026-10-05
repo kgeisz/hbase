@@ -29,6 +29,13 @@ from python.src.logger_config import LOG_FORMAT
 DEFAULT_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'output')
 
 
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    setattr(item, f"rep_{report.when}", report)
+
+
 def _clear_directory(path):
     if not os.path.isdir(path):
         return
@@ -65,6 +72,12 @@ def per_test_log_file(request):
     root_logger.addHandler(handler)
 
     yield
+
+    rep_call = getattr(request.node, 'rep_call', None)
+    if rep_call is not None and rep_call.failed and rep_call.longreprtext:
+        logging.getLogger().error(
+            "TEST FAILED — pytest traceback:\n%s", rep_call.longreprtext
+        )
 
     root_logger.removeHandler(handler)
     handler.close()
