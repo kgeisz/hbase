@@ -20,6 +20,7 @@
 
 import logging
 import os
+import shutil
 
 import pytest
 
@@ -28,15 +29,33 @@ from python.src.logger_config import LOG_FORMAT
 DEFAULT_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'output')
 
 
+def _clear_directory(path):
+    if not os.path.isdir(path):
+        return
+    for entry in os.listdir(path):
+        entry_path = os.path.join(path, entry)
+        if os.path.isdir(entry_path):
+            shutil.rmtree(entry_path)
+        else:
+            os.remove(entry_path)
+
+
 @pytest.fixture(autouse=True)
 def per_test_log_file(request):
     output_dir = os.environ.get('OUTPUT_DIR', DEFAULT_OUTPUT_DIR)
     test_name = request.node.name
-    log_dir = os.path.join(output_dir, test_name)
-    os.makedirs(log_dir, exist_ok=True)
-
     execution_count = getattr(request.node, 'execution_count', 1)
-    log_path = os.path.join(log_dir, f"{test_name}.run{execution_count}.log")
+
+    run_dir = os.path.join(output_dir, test_name, f"run{execution_count}")
+    os.makedirs(run_dir, exist_ok=True)
+
+    log_path = os.path.join(run_dir, f"{test_name}.run{execution_count}.log")
+
+    active_logs_dir = os.environ.get('ACTIVE_CLUSTER_LOGS_DIR')
+    replica_logs_dir = os.environ.get('REPLICA_CLUSTER_LOGS_DIR')
+
+    _clear_directory(active_logs_dir)
+    _clear_directory(replica_logs_dir)
 
     handler = logging.FileHandler(log_path, mode='w')
     handler.setFormatter(logging.Formatter(LOG_FORMAT))
@@ -49,3 +68,12 @@ def per_test_log_file(request):
 
     root_logger.removeHandler(handler)
     handler.close()
+
+    if active_logs_dir and os.path.isdir(active_logs_dir):
+        shutil.copytree(active_logs_dir,
+                        os.path.join(run_dir, f"hbase-cluster1-run{execution_count}-logs"),
+                        dirs_exist_ok=True)
+    if replica_logs_dir and os.path.isdir(replica_logs_dir):
+        shutil.copytree(replica_logs_dir,
+                        os.path.join(run_dir, f"hbase-cluster2-run{execution_count}-logs"),
+                        dirs_exist_ok=True)
