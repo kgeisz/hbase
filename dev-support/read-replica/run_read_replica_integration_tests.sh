@@ -330,10 +330,15 @@ EOF
 
 # Generate Yetus-style console report with per-stage vote/runtime/status.
 echo "Generating console report..."
+LOGS_URL_ARGS=()
+if [[ -n "${LOGS_URL}" ]]; then
+  LOGS_URL_ARGS=(--logs-url "${LOGS_URL}")
+fi
 python3 python/scripts/render_console_report.py \
   --timing "${OUTPUT_DIR}/read-replica-all-timing.env" \
   --junit "${OUTPUT_DIR}/read-replica-nightly-test-results.xml" \
-  --output "${OUTPUT_DIR}/read-replica-console-report.html"
+  --output "${OUTPUT_DIR}/read-replica-console-report.html" \
+  "${LOGS_URL_ARGS[@]}"
 
 print_timing_summary
 

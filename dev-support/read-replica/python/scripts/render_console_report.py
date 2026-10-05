@@ -88,6 +88,18 @@ def format_runtime(total_sec: int | float) -> str:
     return f"{minutes:>3d}m {seconds:>2d}s"
 
 
+def _log_link(test_name: str, color: str, logs_url: str,
+              output_dir: Path) -> str:
+    test_log_dir = output_dir / test_name
+    if not test_log_dir.is_dir():
+        return ""
+    if logs_url:
+        href = f"{logs_url.rstrip('/')}/{test_name}/"
+    else:
+        href = f"{test_name}/"
+    return f'<font color="{color}"><a href="{href}">/{test_name}/</a></font>'
+
+
 def _row(vote: str, color: str, subsystem: str, runtime: str,
          log: str, comment: str) -> str:
     return (
@@ -105,14 +117,16 @@ def _infra_row(subsystem: str, seconds: int, comment: str) -> str:
     return _row("0", "blue", subsystem, format_runtime(seconds), "", comment)
 
 
-def _test_row(result: TestResult) -> str:
+def _test_row(result: TestResult, logs_url: str,
+              output_dir: Path) -> str:
     if result.passed:
         vote, color = "+1", "green"
         comment = f"passed {result.name}"
     else:
         vote, color = "-1", "red"
         comment = f"failed {result.name}"
-    return _row(vote, color, "pytest", format_runtime(result.time_sec), "", comment)
+    log = _log_link(result.name, color, logs_url, output_dir)
+    return _row(vote, color, "pytest", format_runtime(result.time_sec), log, comment)
 
 
 def _total_row(total_sec: int) -> str:
@@ -140,7 +154,9 @@ _INFRA_STAGES = [
 
 
 def build_console_report(timing: dict[str, int],
-                         test_results: list[TestResult]) -> str:
+                         test_results: list[TestResult],
+                         logs_url: str = "",
+                         output_dir: Path | None = None) -> str:
     all_passed = all(t.passed for t in test_results)
 
     if all_passed:
@@ -170,8 +186,9 @@ def build_console_report(timing: dict[str, int],
         seconds = timing.get(timing_key, 0)
         rows.append(_infra_row(subsystem, seconds, comment))
 
+    effective_output_dir = output_dir if output_dir is not None else Path()
     for result in test_results:
-        rows.append(_test_row(result))
+        rows.append(_test_row(result, logs_url, effective_output_dir))
 
     total_sec = timing.get("TOTAL_SEC", 0)
     rows.append(_total_row(total_sec))
@@ -216,6 +233,12 @@ def main(argv: list[str] | None = None) -> int:
         "--output", required=True, type=Path,
         help="Path to write the HTML console report",
     )
+    parser.add_argument(
+        "--logs-url", type=str, default="",
+        help="Base URL for per-test log directories. "
+             "On Jenkins: ${BUILD_URL}artifact/${OUTPUT_DIR_RELATIVE}. "
+             "When empty (default), test rows use relative links.",
+    )
     args = parser.parse_args(argv)
 
     if not args.junit.exists():
@@ -224,7 +247,11 @@ def main(argv: list[str] | None = None) -> int:
 
     timing = parse_timing_env(args.timing)
     test_results = parse_junit_xml(args.junit)
-    report_html = build_console_report(timing, test_results)
+    report_html = build_console_report(
+        timing, test_results,
+        logs_url=args.logs_url,
+        output_dir=args.output.parent,
+    )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(report_html, encoding="utf-8")
