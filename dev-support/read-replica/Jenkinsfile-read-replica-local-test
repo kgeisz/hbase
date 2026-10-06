@@ -74,7 +74,7 @@ pipeline {
                 echo '(x) {color:red}-1 read-replica checks{color}' > "${OUTPUT_DIR}/commentfile"
                 status=1
               fi
-              echo "-- For more information [see read-replica test report|${BUILD_URL}Read_20Replica_20Nightly_20Test_20Report/]" >> "${OUTPUT_DIR}/commentfile"
+              echo "-- For more information [see read-replica test report|${BUILD_URL}Read_20Replica_20Console_20Report/]" >> "${OUTPUT_DIR}/commentfile"
               exit "${status}"
             '''
           )
@@ -89,17 +89,7 @@ pipeline {
           // 1. Publish JUnit XML metrics for Jenkins trend charts
           junit testResults: "${env.OUTPUT_DIR_RELATIVE}/read-replica-nightly-test-results.xml", allowEmptyResults: true
 
-          // 2. Render interactive HTML test report in the Jenkins UI navigation bar
-          publishHTML target: [
-            allowMissing         : true,
-            keepAll              : true,
-            alwaysLinkToLastBuild: true,
-            reportDir            : "${env.OUTPUT_DIR_RELATIVE}",
-            reportFiles          : 'read-replica-nightly-test-report.html',
-            reportName           : 'Read Replica Nightly Test Report'
-          ]
-
-          // 3. Publish Yetus-style console report with per-stage vote/runtime/status
+          // 2. Publish Yetus-style console report with per-stage vote/runtime/status
           publishHTML target: [
             allowMissing         : true,
             keepAll              : true,
