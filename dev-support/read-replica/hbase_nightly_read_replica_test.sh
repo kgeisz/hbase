@@ -141,6 +141,7 @@ echo "Output Dir: ${EFFECTIVE_OUTPUT_DIR}"
 
 cleanup_host() {
   local exit_code=$?
+  set +e
   if [ -z "${BUILD_NUMBER}" ]; then
     echo "Local execution complete. Preserving local container image ${DEV_IMAGE_NAME}."
   else

@@ -103,6 +103,7 @@ export HBASE_IMAGE="hbase-read-replica:${BUILD_NUMBER:-local}"
 
 OVERALL_START_SEC=${SECONDS}
 TIMING_SUMMARY_PRINTED=false
+CLEANUP_RAN=false
 DEV_SUPPORT_IMAGE_BUILD_SEC="${DEV_SUPPORT_IMAGE_BUILD_SEC:-0}"
 RSYNC_SEC=""
 MVN_CLEAN_SEC=""
@@ -231,7 +232,12 @@ echo "Rsync completed (${RSYNC_SEC}s, $(format_duration_hms "${RSYNC_SEC}"))."
 export HBASE_SOURCE_DIR="${REPLICA_DIR}/hbase"
 
 cleanup() {
-  local exit_code=$?
+  local exit_code=${1:-$?}
+  set +e
+  if [ "${CLEANUP_RAN}" = true ]; then
+    exit "${exit_code}"
+  fi
+  CLEANUP_RAN=true
   print_timing_summary
   if [ ${exit_code} -ne 0 ]; then
     echo "=== FAILURE ==="
@@ -344,6 +350,6 @@ print_timing_summary
 
 if [ ${PYTEST_EXIT_CODE} -ne 0 ]; then
   echo "=== FAILURE: One or more read-replica integration tests failed. ==="
-  exit ${PYTEST_EXIT_CODE}
+  cleanup "${PYTEST_EXIT_CODE}"
 fi
 echo "=== Success: All read-replica integration tests passed. ==="
