@@ -46,7 +46,7 @@ print_timing_summary() {
   fi
   TIMING_SUMMARY_PRINTED=true
 
-  local total_sec=$(( SECONDS - OVERALL_START_SEC + DEV_SUPPORT_IMAGE_BUILD_SEC ))
+  local total_sec=$(( SECONDS - OVERALL_START_SEC + ${DEV_SUPPORT_IMAGE_BUILD_SEC:-0} ))
   local dev_image_sec="${DEV_SUPPORT_IMAGE_BUILD_SEC}"
   local rsync_sec="${RSYNC_SEC:--}"
   local mvn_clean_sec="${MVN_CLEAN_SEC:--}"
@@ -56,7 +56,7 @@ print_timing_summary() {
 
   echo ""
   echo "=== Read-replica run timing summary ==="
-  if [ "${dev_image_sec}" -gt 0 ] 2>/dev/null; then
+  if [ -n "${dev_image_sec}" ]; then
     printf "  1. Test-env image build (host):               %6ss (%s)\n" \
       "${dev_image_sec}" "$(format_duration_hms "${dev_image_sec}")"
   else
@@ -104,7 +104,7 @@ export HBASE_IMAGE="hbase-read-replica:${BUILD_NUMBER:-local}"
 OVERALL_START_SEC=${SECONDS}
 TIMING_SUMMARY_PRINTED=false
 CLEANUP_RAN=false
-DEV_SUPPORT_IMAGE_BUILD_SEC="${DEV_SUPPORT_IMAGE_BUILD_SEC:-0}"
+DEV_SUPPORT_IMAGE_BUILD_SEC="${DEV_SUPPORT_IMAGE_BUILD_SEC:-}"
 RSYNC_SEC=""
 MVN_CLEAN_SEC=""
 DOCKER_BUILD_SEC=""
@@ -324,7 +324,7 @@ python3 python/scripts/render_pytest_html_csp_safe.py \
   "${OUTPUT_DIR}/read-replica-nightly-test-report.html"
 
 # Write comprehensive timing file for the console report generator.
-TOTAL_SEC=$(( SECONDS - OVERALL_START_SEC + DEV_SUPPORT_IMAGE_BUILD_SEC ))
+TOTAL_SEC=$(( SECONDS - OVERALL_START_SEC + ${DEV_SUPPORT_IMAGE_BUILD_SEC:-0} ))
 cat > "${OUTPUT_DIR}/read-replica-all-timing.env" <<EOF
 DEV_SUPPORT_IMAGE_BUILD_SEC=${DEV_SUPPORT_IMAGE_BUILD_SEC}
 RSYNC_SEC=${RSYNC_SEC}
