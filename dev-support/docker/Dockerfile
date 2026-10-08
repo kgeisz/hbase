@@ -88,14 +88,12 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get -qq update && \
     locale-gen en_US.UTF-8
 ENV LANG=en_US.UTF-8 LANGUAGE=en_US:en LC_ALL=en_US.UTF-8
 
-# Docker automatically populates TARGETARCH as 'amd64' or 'arm64'
-ARG TARGETARCH
-
 # Ensure the version of node being downloaded is compatible with the build architecture
-RUN if [ "$TARGETARCH" = "arm64" ]; then NODE_ARCH="arm64"; else NODE_ARCH="x64"; fi \
-    && curl -fsSL "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-${NODE_ARCH}.tar.gz" -o node.tar.gz \
-    && tar -xzf node.tar.gz -C /usr/local --strip-components=1 \
-    && rm node.tar.gz
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "arm64" ]; then NODE_ARCH="arm64"; else NODE_ARCH="x64"; fi && \
+    curl -fsSL "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-${NODE_ARCH}.tar.gz" -o node.tar.gz && \
+    tar -xzf node.tar.gz -C /usr/local --strip-components=1 && \
+    rm node.tar.gz
 
 # Install OS-level dependencies for Playwright browsers used in CI.
 # Only chromium and firefox — webkit crashes on Ubuntu 22.04 due to
