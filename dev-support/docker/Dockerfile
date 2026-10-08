@@ -58,10 +58,21 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get -qq update && \
     libxml2-dev='2.9.13+dfsg-*' \
     libxml2-utils='2.9.13+dfsg-*' \
     zip='3.0-*' \
-# read-replica nightly tests use this Dockerfile and need these docker and python dependencies
-    docker.io='20.10.*' \
-    docker-compose-v2='2.*' \
-    python3-venv='3.10.6-*' \
+# Read-Replica nightly tests use this Dockerfile and need these Docker and Python dependencies.
+# Docker needs to be installed from the APT repository rather than Ubuntu's default docker.io
+# packages because docker-ce-cli is compiled with a newer version of Go that handles 52-bit
+# virtual address pointer packing correctly under QEMU emulation (i.e. it works better on arm64)
+    python3-venv='3.10.6-*' && \
+    install -m 0755 -d /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc && \
+    chmod a+r /etc/apt/keyrings/docker.asc && \
+    ARCH=$(dpkg --print-architecture) && \
+    CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME") && \
+    echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${CODENAME} stable" > /etc/apt/sources.list.d/docker.list && \
+    apt-get -qq update && \
+    apt-get -qq install --no-install-recommends -y \
+      docker-ce-cli='5:20.10.*' \
+      docker-compose-plugin='2.*' \
     && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* \
@@ -77,8 +88,12 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get -qq update && \
     locale-gen en_US.UTF-8
 ENV LANG=en_US.UTF-8 LANGUAGE=en_US:en LC_ALL=en_US.UTF-8
 
-# Install Node.js. Needed for Playwright.
-RUN curl -fsSL "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-x64.tar.gz" -o node.tar.gz \
+# Docker automatically populates TARGETARCH as 'amd64' or 'arm64'
+ARG TARGETARCH
+
+# Ensure the version of node being downloaded is compatible with the build architecture
+RUN if [ "$TARGETARCH" = "arm64" ]; then NODE_ARCH="arm64"; else NODE_ARCH="x64"; fi \
+    && curl -fsSL "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-${NODE_ARCH}.tar.gz" -o node.tar.gz \
     && tar -xzf node.tar.gz -C /usr/local --strip-components=1 \
     && rm node.tar.gz
 
