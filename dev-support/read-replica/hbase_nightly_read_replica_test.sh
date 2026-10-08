@@ -155,8 +155,7 @@ trap cleanup_host EXIT
 # Build the dev-support container image using HBASE_ROOT as the build context
 echo "Building dev-support Docker image..."
 DEV_SUPPORT_IMAGE_BUILD_START=${SECONDS}
-docker build --platform linux/amd64 \
-  -t "${DEV_IMAGE_NAME}" \
+docker build -t "${DEV_IMAGE_NAME}" \
   -f "${HBASE_ROOT}/dev-support/docker/Dockerfile" \
   "${HBASE_ROOT}"
 DEV_SUPPORT_IMAGE_BUILD_SEC=$((SECONDS - DEV_SUPPORT_IMAGE_BUILD_START))
@@ -179,7 +178,6 @@ if [ "${DEV_MODE}" = "true" ]; then
   # Start a detached dev container for interactive exploration
   echo "Starting dev container in background..."
   CONTAINER_ID=$(docker run -d \
-    --platform linux/amd64 \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "${HBASE_ROOT}:${HBASE_ROOT}" \
     -v "${EFFECTIVE_OUTPUT_DIR}:${EFFECTIVE_OUTPUT_DIR}" \
@@ -218,7 +216,6 @@ else
   # Run the inner test script inside the dev-support container via DooD
   echo "Launching dev container and starting test suite..."
   docker run --rm \
-    --platform linux/amd64 \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "${HBASE_ROOT}:${HBASE_ROOT}" \
     -v "${EFFECTIVE_OUTPUT_DIR}:${EFFECTIVE_OUTPUT_DIR}" \
