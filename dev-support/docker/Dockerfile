@@ -72,6 +72,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get -qq update && \
     apt-get -qq update && \
     apt-get -qq install --no-install-recommends -y \
       docker-ce-cli='5:20.10.*' \
+      docker-buildx-plugin='0.*' \
       docker-compose-plugin='2.*' \
     && \
     apt-get clean && \
