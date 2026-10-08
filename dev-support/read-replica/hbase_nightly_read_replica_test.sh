@@ -155,6 +155,7 @@ trap cleanup_host EXIT
 # Build the dev-support container image using HBASE_ROOT as the build context
 echo "Building dev-support Docker image..."
 DEV_SUPPORT_IMAGE_BUILD_START=${SECONDS}
+export DOCKER_BUILDKIT=1
 docker build --platform linux/amd64 \
   -t "${DEV_IMAGE_NAME}" \
   -f "${HBASE_ROOT}/dev-support/docker/Dockerfile" \
