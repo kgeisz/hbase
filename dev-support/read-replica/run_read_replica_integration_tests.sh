@@ -114,6 +114,7 @@ PYTEST_SEC=""
 JAVA_VERSION=17
 KEEP_IMAGE=false
 KEEP_CONTAINERS=false
+KEEP_PY_ENV=false
 PYTEST_K_VALUE=""
 
 print_usage() {
@@ -138,6 +139,7 @@ Usage: ${SCRIPT} [options]
                                 to /usr/lib/jvm/java-<ver>.
   -i | --keep-image            Do not remove the Docker image on exit.
   -c | --keep-containers       Do not run 'docker compose down' on exit.
+  -p | --keep-py-env           Do not remove the Python venv (.venv) on exit.
   -k <expression>              Pytest -k filter expression for test selection.
                                 (See Pytest documentation on -k for more info.)
 
@@ -166,6 +168,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     -c|--keep-containers)
       KEEP_CONTAINERS=true
+      shift
+      ;;
+    -p|--keep-py-env)
+      KEEP_PY_ENV=true
       shift
       ;;
     -k)
@@ -260,7 +266,6 @@ cleanup() {
   echo "=== Cleanup: Deleting copied HBase directory: ${REPLICA_DIR}/hbase ==="
   rm -rf "${REPLICA_DIR}/hbase"
   echo "=== Cleanup: Deleting artifacts that would be owned by root on the CI host ==="
-  rm -rf "${REPLICA_DIR}/.venv"
   rm -rf "${REPLICA_DIR}/.pytest_cache"
   rm -rf "${REPLICA_DIR}/python/test/.pytest_cache"
   rm -rf "${REPLICA_DIR}/python/__pycache__"
@@ -271,6 +276,11 @@ cleanup() {
   rm -rf "${REPLICA_DIR}/tmp-read-replica-data"
   rm -rf "${REPLICA_DIR}/cluster1/logs"
   rm -rf "${REPLICA_DIR}/cluster2/logs"
+  if [ "${KEEP_PY_ENV}" = "false" ]; then
+    rm -rf "${REPLICA_DIR}/.venv"
+  else
+    echo "=== Cleanup: Keeping Python venv: ${REPLICA_DIR}/.venv (--keep-py-env) ==="
+  fi
   exit "${exit_code}"
 }
 trap cleanup EXIT

@@ -171,6 +171,7 @@ also be run directly when using dev mode.
 |------|-------------|
 | `-i` / `--keep-image` | Do not remove the `hbase-read-replica` Docker image on exit. Useful for re-running tests without rebuilding. |
 | `-c` / `--keep-containers` | Do not run `docker compose down` on exit. Lets you inspect container state after tests. |
+| `-p` / `--keep-py-env` | Do not remove the Python virtual environment (`.venv`) on exit. Speeds up re-runs by reusing installed dependencies. |
 | `-k <expression>` | Pytest `-k` filter expression for test selection. |
 | `-j` / `--java-version <ver>` | JVM version to use (default: 17). Sets `JAVA_HOME` to `/usr/lib/jvm/java-<ver>`. |
 
@@ -325,7 +326,18 @@ bash run_read_replica_integration_tests.sh --keep-image \
   -k "test_create_drop_behavior"
 ```
 
-**5. Stop and remove the dev container when done:**
+**5. Speed up re-runs with `--keep-py-env`:**
+
+Pass `--keep-py-env` to preserve the Python virtual environment (`.venv`) across runs,
+skipping `pip install` overhead on subsequent invocations. Combine with `--keep-image`
+for the fastest iteration:
+
+```bash
+bash run_read_replica_integration_tests.sh --keep-image --keep-py-env \
+  -k "test_create_drop_behavior"
+```
+
+**6. Stop and remove the dev container when done:**
 
 ```bash
 docker stop <container-id> && docker rm <container-id>
