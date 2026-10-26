@@ -164,22 +164,6 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
     startMonkey();
   }
 
-  private void deleteTablesIfAny() throws IOException {
-    for (TableName table : tableNames) {
-      util.deleteTableIfAny(table);
-    }
-  }
-
-  protected void createTables(String tableBaseName) throws Exception {
-    tableNames = new TableName[numTables];
-    for (int i = 0; i < numTables; i++) {
-      tableNames[i] = TableName.valueOf(tableBaseName + ".table." + i);
-    }
-    for (TableName table : tableNames) {
-      createTable(table);
-    }
-  }
-
   /**
    * Creates a directory specified by backupWALDir and sets this directory to
    * CONF_CONTINUOUS_BACKUP_WAL_DIR in the configuration.
@@ -346,6 +330,16 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
     }
   }
 
+  protected void createTables(String tableBaseName) throws Exception {
+    tableNames = new TableName[numTables];
+    for (int i = 0; i < numTables; i++) {
+      tableNames[i] = TableName.valueOf(tableBaseName + ".table." + i);
+    }
+    for (TableName table : tableNames) {
+      createTable(table);
+    }
+  }
+
   protected void createTable(TableName tableName) throws Exception {
     long startTime, endTime;
 
@@ -362,6 +356,12 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
     util.waitTableAvailable(tableName);
     endTime = EnvironmentEdgeManager.currentTime();
     LOG.info("Pre-split table created successfully in {}ms.", (endTime - startTime));
+  }
+
+  private void deleteTablesIfAny() throws IOException {
+    for (TableName table : tableNames) {
+      util.deleteTableIfAny(table);
+    }
   }
 
   protected void loadData(TableName table, int numRows) throws IOException {
