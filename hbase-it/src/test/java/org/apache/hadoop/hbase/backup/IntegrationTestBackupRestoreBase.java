@@ -521,7 +521,6 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
     TableName tableName) throws IOException, InterruptedException {
     BackupSystemTable backupSystemTable = new BackupSystemTable(conn);
     Map<ServerName, Long> checkpointTimestamps = backupSystemTable.getBackupCheckpointTimestamps();
-    int i = 0;
     int sleepTimeSec = 10;
     int waitThresholdMs = 15 * 60 * 1000;
     long waitStartTime = System.currentTimeMillis();
@@ -533,13 +532,13 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
       }
       LOG.info(
         "Waiting {} seconds for the replication checkpoint timestamp for each region server "
-          + "to catch up with the timestamp of the latest Put on {}",
+          + "to catch up with the timestamp of the latest Put on table {}",
         sleepTimeSec, tableName.getNameAsString());
       Thread.sleep(sleepTimeSec * 1000);
       checkpointTimestamps = backupSystemTable.getBackupCheckpointTimestamps();
-      i++;
     }
-    LOG.info("Done waiting. Total wait time: {} seconds", i * sleepTimeSec);
+    LOG.info("Done waiting for replication timestamps to update. Total wait time: {} seconds",
+      (System.currentTimeMillis() - waitStartTime) / 1000);
   }
 
   /**

@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
 import org.apache.hadoop.fs.FileSystem;
@@ -51,6 +52,9 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
   protected static final Logger LOG =
     LoggerFactory.getLogger(IntegrationTestPointInTimeRestore.class);
 
+  protected static final String PITR_TABLE_BASE_NAME = CLASS_NAME + ".pitr.success";
+  protected static final int DEFAULT_NUMBER_OF_TABLES = 2;
+
   private static Path restoreRootDir;
 
   @Override
@@ -66,6 +70,7 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
 
     regionServerCount = 1;
     rowsInIteration = 100;
+    numTables = DEFAULT_NUMBER_OF_TABLES;
 
     LOG.info("Initializing cluster with {} region server(s)", regionServerCount);
     util.initializeCluster(regionServerCount);
@@ -83,82 +88,78 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
   @Test
   public void testPointInTimeRestore() throws Exception {
     LOG.info("Running Point-In-Time-Restore integration test");
-    TableName tableName = TableName.valueOf(CLASS_NAME + ".pitr.success");
-    try (Connection conn = util.getConnection(); BackupAdmin client = new BackupAdminImpl(conn);
-      Table tableConn = conn.getTable(tableName)) {
+    try (Connection conn = util.getConnection(); BackupAdmin client = new BackupAdminImpl(conn)) {
 
       runPitrFailureFromUsingNonContinuousFullBackup(client);
 
       setEnvironmentEdgeToNumDaysAgo(30);
 
-      createTable(tableName);
-      List<TableName> tables = Lists.newArrayList(tableName);
+      createTables(PITR_TABLE_BASE_NAME);
+      List<TableName> tables = Arrays.stream(tableNames).toList();
       List<String> backupIds = new ArrayList<>();
 
       // Add rows to the table
-      loadData(tableName, rowsInIteration);
-      int preFullBackupRowCount = PITRTestUtil.getRowCount(util, tableName);
+      loadDataIntoTables(tables);
+      int preFullBackupRowCount = PITRTestUtil.getRowCount(util, tables.get(0));
       LOG.info("kevin: Current row count for table {} before continuous full backup is: {}",
-        tableName, preFullBackupRowCount);
+        tables.get(0), preFullBackupRowCount);
 
       // Create a full backup with continuous backup enabled
       BackupRequest fullBackupRequest = createFullBackupRequest(tables, true);
       String fullBackupId = backup(fullBackupRequest, client, backupIds);
+      LOG.info("Finished full backup on tables {} with backup ID: {}", tables, fullBackupId);
 
       setEnvironmentEdgeToNumDaysAgo(25);
 
       // Add rows to the table
-      LOG.info("kevin: Loading more data into table {} after performing PITR", tableName);
-      loadData(tableName, rowsInIteration);
-      int postFullBackupRowCount = PITRTestUtil.getRowCount(util, tableName);
-      LOG.info("kevin: Current row count for table after full backup {} is: {}", tableName,
+      LOG.info("kevin: Loading more data into table {} after performing PITR", tables.get(0));
+      loadDataIntoTables(tables);
+      int postFullBackupRowCount = PITRTestUtil.getRowCount(util, tables.get(0));
+      LOG.info("kevin: Current row count for table after full backup {} is: {}", tables.get(0),
         postFullBackupRowCount);
 
       int numDaysAgo = 20;
       setEnvironmentEdgeToNumDaysAgo(numDaysAgo);
 
       runPitrValidationOnlyModeTestCase(client, tables);
-      runPitrFailureFromUsingTimeBeforeOldestBackup(client, tableName);
-      runPitrFailureFromUsingDateAfterRetentionWindow(client, tableName);
-      runSuccessfulPitrAndVerifyRowCount(client, tableName, preFullBackupRowCount, 26);
+      runPitrFailureFromUsingTimeBeforeOldestBackup(client, tables);
+      runPitrFailureFromUsingDateAfterRetentionWindow(client, tables);
+      runSuccessfulPitrAndVerifyRowCount(client, tables, preFullBackupRowCount, 26);
 
-      // The original table still has all of its rows
+      // The original tables still have all of their rows
       int expectedCurrentRowCount = rowsInIteration * 2;
-      assertEquals(expectedCurrentRowCount, PITRTestUtil.getRowCount(util, tableName),
-        "The original table should still have " + expectedCurrentRowCount + " rows");
+      verifyExpectedRowCountInAllTables(expectedCurrentRowCount, tables);
 
       for (int i = 1; i <= 5; i++) {
         // Move time "two days closer". Ex. 20 days ago -> 18
-        // Add data to the table at this point in time.
+        // Add data to the tables at this point in time.
         numDaysAgo = numDaysAgo - 2;
         setEnvironmentEdgeToNumDaysAgo(numDaysAgo);
-        loadData(tableName, rowsInIteration);
-        int preIncrementalBackupRowCount = PITRTestUtil.getRowCount(util, tableName);
+        loadDataIntoTables(tables);
+        int preIncrementalBackupRowCount = PITRTestUtil.getRowCount(util, tables.get(0));
 
-        long latestPutTimestamp = getLatestPutTimestamp(tableConn);
-        waitForCheckpointTimestampsToUpdate(conn, latestPutTimestamp, tableName);
+        waitForCheckpointToUpdateForAllTables(conn, tables);
 
-        LOG.info("kevin: Creating incremental backup number {} for table {}", i, tableName);
+        LOG.info("kevin: Creating incremental backup number {} for tables: {}", i, tables);
         BackupRequest request = createIncrementalBackupRequest(tables, true);
         String incrementalBackupId = backup(request, client, backupIds);
-        LOG.info("kevin: Created incremental backup number {} with ID: {}", i, incrementalBackupId);
+        LOG.info("kevin: Created incremental backup number {} on tables {} with ID: {}", i, tables,
+          incrementalBackupId);
 
         // Move time another "two days closer". Ex. 18 days ago -> 16
-        // Add data to the table at this point in time.
+        // Add data to the tables at this point in time.
         setEnvironmentEdgeToNumDaysAgo(numDaysAgo - 2);
-        loadData(tableName, rowsInIteration);
+        loadDataIntoTables(tables);
 
-        // Restore table to how it was "one day ago". Ex. Restore to 17 days ago
-        // The most recently added data should not be in this restored table
-        runSuccessfulPitrAndVerifyRowCount(client, tableName, preIncrementalBackupRowCount, numDaysAgo - 1);
+        // Restore tables to how they were "one day ago". Ex. Restore to 17 days ago
+        // The most recently added data should not be in these restored tables
+        runSuccessfulPitrAndVerifyRowCount(client, tables, preIncrementalBackupRowCount,
+          numDaysAgo - 1);
 
         // The original table still has all of its rows
         expectedCurrentRowCount = expectedCurrentRowCount + 2 * rowsInIteration;
-        assertEquals(expectedCurrentRowCount, PITRTestUtil.getRowCount(util, tableName),
-          "The original table should still have " + expectedCurrentRowCount + " rows");
+        verifyExpectedRowCountInAllTables(expectedCurrentRowCount, tables);
       }
-
-      // runInputScanner();
     }
   }
 
@@ -185,9 +186,6 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
 
     loadDataIntoTables(tableNames);
 
-    // Create non-continuous and continuous full backups
-    // String backupId = runNonContinuousFullBackup(client, nonContinuousTableName);
-
     // Create a full non-continuous backup
     BackupRequest fullBackupRequest =
       createFullBackupRequest(List.of(nonContinuousTableName), false);
@@ -212,8 +210,10 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
       fail(
         "An IOException should have occurred due to running PITR on a non-continuous full backup");
     } catch (IOException e) {
-      assertTrue(e.getMessage().contains(
-        "Continuous Backup is not enabled for the following tables: " + nonContinuousTableName));
+      String expectedMsg =
+        "Continuous Backup is not enabled for the following tables: " + nonContinuousTableName;
+      assertTrue(e.getMessage().contains(expectedMsg),
+        getIOExceptionAssertionFailureMsg(expectedMsg, e));
       LOG.info("kevin: Got expected IOException after PITR on a non-continuous full backup");
     }
 
@@ -222,42 +222,12 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
     delete(fullBackupIds.toArray(new String[0]), client);
   }
 
-  // private BackupRequest createFullBackupRequest(List<TableName> tables, boolean
-  // isContinuousBackupEnabled) {
-  // BackupRequest.Builder fullBackupBuilder = new BackupRequest.Builder();
-  // return fullBackupBuilder.withBackupType(BackupType.FULL).withTableList(tables)
-  // .withTargetRootDir(backupRootDir).withContinuousBackupEnabled(isContinuousBackupEnabled)
-  // .build();
-  // }
-
-  private String runNonContinuousFullBackup(BackupAdmin client, TableName tableName)
+  private void runPitrValidationOnlyModeTestCase(BackupAdmin client, List<TableName> tables)
     throws IOException {
-    LOG.info("kevin: Intentionally creating a full backup for table {} with continuous backup "
-      + "DISABLED", tableName);
-    List<TableName> tables = Lists.newArrayList(tableName);
-    BackupRequest fullBackupRequest = createFullBackupRequest(tables, false);
-    String fullBackupId = backup(fullBackupRequest, client, null);
-    LOG.info("Created full non-continuous backup with ID: {}", fullBackupId);
-    return fullBackupId;
-  }
-
-  private String runContinuousFullBackup(BackupAdmin client, List<TableName> tables)
-    throws IOException {
-    // Create a full backup for the table
-    LOG.info("Creating full backup image with continuous backup enabled for the following "
-      + "table(s): {}", tables);
-    BackupRequest fullBackupRequest = createFullBackupRequest(tables, true);
-    String fullBackupId = backup(fullBackupRequest, client, null);
-    LOG.info("Created full backup with ID: {}", fullBackupId);
-    return fullBackupId;
-  }
-
-  private void runPitrValidationOnlyModeTestCase(BackupAdmin client, List<TableName> tableName)
-    throws IOException {
-    TableName restoredTable = TableName.valueOf("restoredTable");
+    List<TableName> restoredTables = getTargetTablesForPitrRestore(tables);
 
     // Create request for PITR in validation-only mode
-    PointInTimeRestoreRequest pitrRequest = createPitrRequest(tableName, List.of(restoredTable),
+    PointInTimeRestoreRequest pitrRequest = createPitrRequest(tables, restoredTables,
       System.currentTimeMillis() - 26 * ONE_DAY_IN_MILLISECONDS, true);
 
     // Run PITR in validation-only mode
@@ -267,48 +237,72 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
   }
 
   private void runPitrFailureFromUsingTimeBeforeOldestBackup(BackupAdmin client,
-    TableName tableName) {
-    TableName restoredTable = TableName.valueOf("restoredTable");
+    List<TableName> tables) {
+    List<TableName> restoredTables = getTargetTablesForPitrRestore(tables);
 
     // Create bad PITR request due to date being before the oldest backup
-    PointInTimeRestoreRequest pitrRequest = createPitrRequest(List.of(tableName),
-      List.of(restoredTable), System.currentTimeMillis() - 31 * ONE_DAY_IN_MILLISECONDS, false);
+    PointInTimeRestoreRequest pitrRequest = createPitrRequest(tables, restoredTables,
+      System.currentTimeMillis() - 31 * ONE_DAY_IN_MILLISECONDS, false);
 
     // Run actual PITR
     LOG.info("kevin: Performing faulty Point-In-Time-Restore on table {} due to bad restore date",
-      tableName);
+      tables);
     try {
       pointInTimeRestore(pitrRequest, client);
       fail("Expected PITR to fail due to bad restore date");
     } catch (IOException e) {
-      assertTrue(e.getMessage()
-        .contains("PITR failed: No valid backup/WALs found for source " + "table " + tableName));
+      String expectedMsg =
+        "PITR failed: No valid backup/WALs found for source table " + tables.get(0);
+      assertTrue(e.getMessage().contains(expectedMsg),
+        getIOExceptionAssertionFailureMsg(expectedMsg, e));
       LOG.info(
         "kevin: Got expected IOException after attempting PITR using a date before the oldest backup");
     }
   }
 
   private void runPitrFailureFromUsingDateAfterRetentionWindow(BackupAdmin client,
-    TableName tableName) {
-    TableName restoredTable = TableName.valueOf("restoredTable");
+    List<TableName> tables) {
+    List<TableName> restoredTables = getTargetTablesForPitrRestore(tables);
 
     // Create bad PITR request due to date being before the oldest backup
     long requestedRecoveryTime = System.currentTimeMillis() + ONE_DAY_IN_MILLISECONDS;
     PointInTimeRestoreRequest pitrRequest =
-      createPitrRequest(List.of(tableName), List.of(restoredTable), requestedRecoveryTime, false);
+      createPitrRequest(tables, restoredTables, requestedRecoveryTime, false);
 
     // Run actual PITR
     LOG.info("kevin: Performing faulty Point-In-Time-Restore on table {} due to restore date "
-      + "after retention window", tableName);
+      + "after retention window", tables);
     try {
       pointInTimeRestore(pitrRequest, client);
       fail("Expected PITR to fail due to using date after retention window");
     } catch (IOException e) {
-      assertTrue(e.getMessage()
-        .contains("Requested recovery time (" + requestedRecoveryTime + ") is in the future"));
+      String expectedMsg =
+        "Requested recovery time (" + requestedRecoveryTime + ") is in the future";
+      assertTrue(e.getMessage().contains(expectedMsg),
+        getIOExceptionAssertionFailureMsg(expectedMsg, e));
       LOG.info("kevin: Got expected IOException after attempting PITR using a date after the "
         + "retention window");
     }
+  }
+
+  private void runSuccessfulPitrAndVerifyRowCount(BackupAdmin client, List<TableName> tables,
+    int expectedPostPitrRowCount, int toDaysAgo) throws IOException {
+    List<TableName> restoredTables = getTargetTablesForPitrRestore(tables);
+
+    // Create PITR request
+    PointInTimeRestoreRequest pitrRequest = createPitrRequest(tables, restoredTables,
+      System.currentTimeMillis() - toDaysAgo * ONE_DAY_IN_MILLISECONDS, false);
+
+    // Run PITR
+    LOG.info("kevin: Performing Point-In-Time-Restore on tables {} and restoring to tables {}",
+      tables, restoredTables);
+    pointInTimeRestore(pitrRequest, client);
+    LOG.info("kevin: Finished Point-In-Time-Restore on tables {} to tables {}", tables,
+      restoredTables);
+
+    // Verify row count post-PITR
+    LOG.info("Verifying row counts for restored tables {} after PITR", restoredTables);
+    verifyExpectedRowCountInAllTables(expectedPostPitrRowCount, restoredTables);
   }
 
   private PointInTimeRestoreRequest createPitrRequest(List<TableName> tableNames,
@@ -321,31 +315,6 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
       .build();
   }
 
-  private void runSuccessfulPitrAndVerifyRowCount(BackupAdmin client, TableName tableName,
-    int expectedPostPitrRowCount, int toDaysAgo) throws IOException {
-    TableName restoredTable = TableName.valueOf("restoredTable");
-
-    // Create PITR request
-    PointInTimeRestoreRequest pitrRequest =
-      createPitrRequest(List.of(tableName), List.of(restoredTable),
-        System.currentTimeMillis() - toDaysAgo * ONE_DAY_IN_MILLISECONDS, false);
-
-    // Run PITR
-    LOG.info("kevin: Performing Point-In-Time-Restore on table {} and restoring to table {}",
-      tableName, restoredTable);
-    pointInTimeRestore(pitrRequest, client);
-    LOG.info("kevin: Finished Point-In-Time-Restore on table {} to table {}", tableName,
-      restoredTable);
-
-    // Verify row count post-PITR
-    int restoredTableRowCount = PITRTestUtil.getRowCount(util, restoredTable);
-    LOG.info("kevin: Current row count for table {} after PITR is: {}", restoredTable,
-      restoredTableRowCount);
-    assertEquals(expectedPostPitrRowCount, restoredTableRowCount,
-      "Expected PITR restored table " + restoredTable.getQualifierAsString() + " to have "
-        + expectedPostPitrRowCount + " rows. Got " + restoredTableRowCount + " rows instead");
-  }
-
   private void setEnvironmentEdgeToNumDaysAgo(int numDaysAgo) {
     EnvironmentEdgeManager
       .injectEdge(() -> System.currentTimeMillis() - numDaysAgo * ONE_DAY_IN_MILLISECONDS);
@@ -354,18 +323,47 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
       EnvironmentEdgeManager.currentTime());
   }
 
-  protected void runInputScanner() {
-    Scanner scanner = new Scanner(System.in);
-    System.out.println("kevin: Waiting for the user to input a line");
-    String line = scanner.nextLine();
-    System.out.printf("kevin: Got a line: '%s'. Continuing%n", line);
-  }
-
   private void loadDataIntoTables(List<TableName> tableNames) throws IOException {
     for (TableName tableName : tableNames) {
       LOG.info("kevin: Loading data into table {}", tableName);
       loadData(tableName, rowsInIteration);
     }
+  }
+
+  protected void verifyExpectedRowCountInAllTables(int expectedCurrentRowCount,
+    List<TableName> tables) throws IOException {
+    for (TableName table : tables) {
+      assertEquals(expectedCurrentRowCount, PITRTestUtil.getRowCount(util, table),
+        "Expected table " + table + " to have " + expectedCurrentRowCount + " rows");
+    }
+  }
+
+  protected void waitForCheckpointToUpdateForAllTables(Connection conn, List<TableName> tables)
+    throws IOException, InterruptedException {
+    long waitStartTime = System.currentTimeMillis();
+    for (TableName tableName : tables) {
+      LOG.info("Waiting for checkpoint timestamp to update for tables {}", tables);
+      try (Table tableConn = conn.getTable(tableName)) {
+        long latestPutTimestamp = getLatestPutTimestamp(tableConn);
+        waitForCheckpointTimestampsToUpdate(conn, latestPutTimestamp, tableName);
+      }
+    }
+    LOG.info("Done waiting for checkpoint timestamps to update for tables {}. "
+        + "Total wait time : {} seconds",
+      tables, (System.currentTimeMillis() - waitStartTime) / 1000);
+  }
+
+  protected List<TableName> getTargetTablesForPitrRestore(List<TableName> backedUpTables) {
+    List<TableName> restoredTables = new ArrayList<>(List.of());
+    for (int i = 0; i < backedUpTables.size(); i++) {
+      restoredTables.add(TableName.valueOf("restoredTable" + i));
+    }
+    return restoredTables;
+  }
+
+  protected String getIOExceptionAssertionFailureMsg(String expectedMsg, IOException e) {
+    return "Expected IOException to occur with the following message:\n" + expectedMsg
+      + ".\n\nInstead got:\n" + e.getMessage();
   }
 
   @Override
