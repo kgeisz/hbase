@@ -165,43 +165,26 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
 
   // The PITR fails due to one table not having continuous backup enabled
   private void runPitrFailureFromUsingNonContinuousFullBackup(BackupAdmin client) throws Exception {
-    List<TableName> tableNames = new ArrayList<>();
-    List<TableName> restoredTableNames = new ArrayList<>();
-    List<String> fullBackupIds = new ArrayList<>();
-
     setEnvironmentEdgeToNumDaysAgo(50);
 
     // This table will be backed up via a non-continuous full backup
     TableName nonContinuousTableName =
       TableName.valueOf(CLASS_NAME + ".non-continuous.pitr.failure");
     createTable(nonContinuousTableName);
-    tableNames.add(nonContinuousTableName);
-    restoredTableNames.add(TableName.valueOf("nonContinuousRestoredTable"));
 
-    // This table will be backed up via a continuous full backup
-    TableName continuousTableName = TableName.valueOf(CLASS_NAME + "continuous.pitr.failure");
-    createTable(continuousTableName);
-    tableNames.add(continuousTableName);
-    restoredTableNames.add(TableName.valueOf("continuousRestoredTable"));
-
-    loadDataIntoTables(tableNames);
+    loadData(nonContinuousTableName, rowsInIteration);
 
     // Create a full non-continuous backup
     BackupRequest fullBackupRequest =
       createFullBackupRequest(List.of(nonContinuousTableName), false);
     String backupId = backup(fullBackupRequest, client, null);
-    fullBackupIds.add(backupId);
-
-    // Create a full continuous backup
-    fullBackupRequest = createFullBackupRequest(List.of(continuousTableName), true);
-    backupId = backup(fullBackupRequest, client, null);
-    fullBackupIds.add(backupId);
 
     setEnvironmentEdgeToNumDaysAgo(40);
-    loadDataIntoTables(tableNames);
+    loadData(nonContinuousTableName, rowsInIteration);
 
     // Run a PITR that should fail since the full backup is not continuous
-    PointInTimeRestoreRequest pitrRequest = createPitrRequest(tableNames, restoredTableNames,
+    PointInTimeRestoreRequest pitrRequest = createPitrRequest(List.of(nonContinuousTableName),
+      List.of(TableName.valueOf("nonContinuousRestoredTable")),
       System.currentTimeMillis() - 41 * ONE_DAY_IN_MILLISECONDS, false);
     LOG.info("kevin: Running Point-In-Time-Restore on a non-continuous full backup. "
       + "Expecting a failure to occur");
@@ -210,16 +193,16 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
       fail(
         "An IOException should have occurred due to running PITR on a non-continuous full backup");
     } catch (IOException e) {
-      String expectedMsg =
-        "Continuous Backup is not enabled for the following tables: " + nonContinuousTableName;
+      String expectedMsg = String.format(
+        "Continuous Backup is not enabled for the following tables: %s", nonContinuousTableName);
       assertTrue(e.getMessage().contains(expectedMsg),
         getIOExceptionAssertionFailureMsg(expectedMsg, e));
       LOG.info("kevin: Got expected IOException after PITR on a non-continuous full backup");
     }
 
     // These backups are no longer needed
-    LOG.info("kevin: Deleting full backups with IDs: {}", fullBackupIds);
-    delete(fullBackupIds.toArray(new String[0]), client);
+    LOG.info("kevin: Deleting full backup with ID: {}", backupId);
+    delete(new String[] { backupId }, client);
   }
 
   private void runPitrValidationOnlyModeTestCase(BackupAdmin client, List<TableName> tables)
@@ -241,8 +224,9 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
     List<TableName> restoredTables = getTargetTablesForPitrRestore(tables);
 
     // Create bad PITR request due to date being before the oldest backup
+    long restoreToDatetime = System.currentTimeMillis() - 31 * ONE_DAY_IN_MILLISECONDS;
     PointInTimeRestoreRequest pitrRequest = createPitrRequest(tables, restoredTables,
-      System.currentTimeMillis() - 31 * ONE_DAY_IN_MILLISECONDS, false);
+      restoreToDatetime, false);
 
     // Run actual PITR
     LOG.info("kevin: Performing faulty Point-In-Time-Restore on table {} due to bad restore date",
@@ -251,8 +235,9 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
       pointInTimeRestore(pitrRequest, client);
       fail("Expected PITR to fail due to bad restore date");
     } catch (IOException e) {
-      String expectedMsg =
-        "PITR failed: No valid backup/WALs found for source table " + tables.get(0);
+      String expectedMsg = String.format(
+        "PITR failed: No valid backup/WALs found for source table %s (target: %s) before time %s",
+        tables.get(0), restoredTables.get(0), restoreToDatetime);
       assertTrue(e.getMessage().contains(expectedMsg),
         getIOExceptionAssertionFailureMsg(expectedMsg, e));
       LOG.info(
@@ -276,8 +261,8 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
       pointInTimeRestore(pitrRequest, client);
       fail("Expected PITR to fail due to using date after retention window");
     } catch (IOException e) {
-      String expectedMsg =
-        "Requested recovery time (" + requestedRecoveryTime + ") is in the future";
+      String expectedMsg = String.format(
+        "Requested recovery time (%s) is in the future", requestedRecoveryTime);
       assertTrue(e.getMessage().contains(expectedMsg),
         getIOExceptionAssertionFailureMsg(expectedMsg, e));
       LOG.info("kevin: Got expected IOException after attempting PITR using a date after the "
