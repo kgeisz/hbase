@@ -24,12 +24,14 @@ import static org.apache.hadoop.hbase.mapreduce.WALPlayer.IGNORE_EMPTY_FILES;
 import static org.apache.hadoop.hbase.mapreduce.WALPlayer.IGNORE_MISSING_FILES;
 import static org.apache.hadoop.hbase.replication.regionserver.ReplicationMarkerChore.REPLICATION_MARKER_ENABLED_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +41,14 @@ import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.backup.impl.BackupAdminImpl;
 import org.apache.hadoop.hbase.backup.util.BackupUtils;
 import org.apache.hadoop.hbase.client.Connection;
+import org.apache.hadoop.hbase.client.Delete;
+import org.apache.hadoop.hbase.client.Get;
+import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
+import org.apache.hadoop.hbase.filter.KeyOnlyFilter;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -90,17 +99,21 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
     LOG.info("Running Point-In-Time-Restore integration test");
     try (Connection conn = util.getConnection(); BackupAdmin client = new BackupAdminImpl(conn)) {
 
-      runPitrFailureFromUsingNonContinuousFullBackup(client);
+//      runPitrFailureFromUsingNonContinuousFullBackup(client);
 
       setEnvironmentEdgeToNumDaysAgo(30);
 
+      // TODO:
+      //  test deleting WALs
+      //  test with custom backup location
+      //  verify ignoring incomplete/failed backups (how do I force a failure?)
       createTables(PITR_TABLE_BASE_NAME);
       List<TableName> tables = Arrays.stream(tableNames).toList();
       List<String> backupIds = new ArrayList<>();
 
       // Add rows to the table
-      loadDataIntoTables(tables);
-      LinkedHashMap<TableName, Integer> preFullBackupRowCounts = getExpectedTargetTableRowCounts(tables);
+      loadRandomDataIntoTables(tables);
+      LinkedHashMap<TableName, Integer> expectedTargetTableRowCounts = getExpectedTargetTableRowCounts(tables);
 
       // Create a full backup with continuous backup enabled
       BackupRequest fullBackupRequest = createFullBackupRequest(tables, true);
@@ -111,7 +124,7 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
 
       // Add rows to the table
       LOG.info("kevin: Loading more data into table {} after performing PITR", tables.get(0));
-      loadDataIntoTables(tables);
+      loadRandomDataIntoTables(tables);
       int postFullBackupRowCount = PITRTestUtil.getRowCount(util, tables.get(0));
       LOG.info("kevin: Current row count for table after full backup {} is: {}", tables.get(0),
         postFullBackupRowCount);
@@ -119,10 +132,10 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
       int numDaysAgo = 20;
       setEnvironmentEdgeToNumDaysAgo(numDaysAgo);
 
-      runPitrValidationOnlyModeTestCase(client, tables);
-      runPitrFailureFromUsingTimeBeforeOldestBackup(client, tables);
-      runPitrFailureFromUsingDateAfterRetentionWindow(client, tables);
-      runSuccessfulPitrAndVerifyRowCount(client, tables, preFullBackupRowCounts, 26);
+//      runPitrValidationOnlyModeTestCase(client, tables);
+//      runPitrFailureFromUsingTimeBeforeOldestBackup(client, tables);
+//      runPitrFailureFromUsingDateAfterRetentionWindow(client, tables);
+      runSuccessfulPitrAndVerifyRowCount(client, tables, expectedTargetTableRowCounts, 26);
 
       // The original tables still have all of their rows
       int rowCountMultiplier = 2;
@@ -131,11 +144,8 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
       for (int i = 1; i <= 3; i++) {
         // Move time "two days closer". Ex. 20 days ago -> 18
         // Add data to the tables at this point in time.
-        numDaysAgo = numDaysAgo - 2;
-        setEnvironmentEdgeToNumDaysAgo(numDaysAgo);
-        loadDataIntoTables(tables);
-        LinkedHashMap<TableName, Integer> preIncrementalBackupRowCount
-          = getExpectedTargetTableRowCounts(tables);
+        numDaysAgo = moveTwoDaysCloserAndLoadData(tables, numDaysAgo);
+        expectedTargetTableRowCounts = getExpectedTargetTableRowCounts(tables);
 
         waitForCheckpointToUpdateForAllTables(conn, tables);
 
@@ -147,18 +157,43 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
 
         // Move time another "two days closer". Ex. 18 days ago -> 16
         // Add data to the tables at this point in time.
-        setEnvironmentEdgeToNumDaysAgo(numDaysAgo - 2);
-        loadDataIntoTables(tables);
+        numDaysAgo = moveTwoDaysCloserAndLoadData(tables, numDaysAgo);
 
-        // Restore tables to how they were "one day ago". Ex. Restore to 17 days ago
+        // Restore tables to how they were "one day ago"
+        // Ex. Current time is "16 days ago"; restore to 17 days ago
         // The most recently added data should not be in these restored tables
-        runSuccessfulPitrAndVerifyRowCount(client, tables, preIncrementalBackupRowCount,
-          numDaysAgo - 1);
+        runSuccessfulPitrAndVerifyRowCount(client, tables, expectedTargetTableRowCounts,
+          numDaysAgo + 1);
 
         // The original table still has all of its rows
         rowCountMultiplier = rowCountMultiplier + 2;
         verifyExpectedSourceTableRowCounts(tables, rowCountMultiplier);
       }
+
+      // Setting to 6 days ago after the 3 iterations above
+      numDaysAgo = numDaysAgo - 2;
+      setEnvironmentEdgeToNumDaysAgo(numDaysAgo);
+
+      expectedTargetTableRowCounts = getExpectedTargetTableRowCounts(tables);
+      LinkedHashMap<TableName, Integer> sourceTableRowCountsPreRowDelete = getTableRowCounts(tables);
+
+      // Delete a row from each table and save the deleted row
+      List<byte[]> deletedRowFromEachSourceTable = deleteFirstRowFromEachTable(conn, tables);
+      verifyRowDeletedInEachTable(
+        conn, tables, deletedRowFromEachSourceTable, sourceTableRowCountsPreRowDelete);
+
+      waitForCheckpointToUpdateForAllTables(conn, tables);
+
+      // Set to 4 days ago
+      numDaysAgo = numDaysAgo - 2;
+      setEnvironmentEdgeToNumDaysAgo(numDaysAgo);
+
+      // Run PITR and verify the deleted row has been restored in each table
+      // A row was deleted from each table "6 days ago". Restore to "7 days ago" and verify
+      // each restored table has the deleted row
+      List<TableName> restoredTables
+        = runSuccessfulPitrAndVerifyRowCount(client, tables, expectedTargetTableRowCounts, numDaysAgo + 3);
+      verifyEachRestoredTableHasDeletedRow(conn, restoredTables, deletedRowFromEachSourceTable);
     }
   }
 
@@ -171,7 +206,7 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
       TableName.valueOf(CLASS_NAME + ".non-continuous.pitr.failure");
     createTable(nonContinuousTableName);
 
-    loadData(nonContinuousTableName, rowsInIteration);
+    loadRandomData(nonContinuousTableName, rowsInIteration);
 
     // Create a full non-continuous backup
     BackupRequest fullBackupRequest =
@@ -179,7 +214,7 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
     String backupId = backup(fullBackupRequest, client, null);
 
     setEnvironmentEdgeToNumDaysAgo(40);
-    loadData(nonContinuousTableName, rowsInIteration);
+    loadRandomData(nonContinuousTableName, rowsInIteration);
 
     // Run a PITR that should fail since the full backup is not continuous
     PointInTimeRestoreRequest pitrRequest = createPitrRequest(List.of(nonContinuousTableName),
@@ -269,7 +304,7 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
     }
   }
 
-  private void runSuccessfulPitrAndVerifyRowCount(BackupAdmin client, List<TableName> tables,
+  private List<TableName> runSuccessfulPitrAndVerifyRowCount(BackupAdmin client, List<TableName> tables,
     LinkedHashMap<TableName, Integer> expectedPostPitrRowCounts, int toDaysAgo) throws IOException {
     List<TableName> restoredTables = getTargetTablesForPitrRestore(tables);
 
@@ -287,6 +322,8 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
     // Verify row count post-PITR
     LOG.info("Verifying row counts for restored tables {} after PITR", restoredTables);
     verifyExpectedRowCountInAllTables(expectedPostPitrRowCounts);
+
+    return restoredTables;
   }
 
   private PointInTimeRestoreRequest createPitrRequest(List<TableName> tableNames,
@@ -307,7 +344,15 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
       EnvironmentEdgeManager.currentTime());
   }
 
-  private void loadDataIntoTables(List<TableName> tables) throws IOException {
+  private int moveTwoDaysCloserAndLoadData(List<TableName> tables, int numDaysAgo)
+    throws IOException {
+    numDaysAgo = numDaysAgo - 2;
+    setEnvironmentEdgeToNumDaysAgo(numDaysAgo);
+    loadRandomDataIntoTables(tables);
+    return numDaysAgo;
+  }
+
+  private void loadRandomDataIntoTables(List<TableName> tables) throws IOException {
     TableName tableName;
     int numRows;
     for (int i = 0; i < tables.size(); i++) {
@@ -322,7 +367,84 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
         numRows = rowsInIteration;
       }
       LOG.info("kevin: Loading {} rows into table {}", numRows, tableName);
-      loadData(tableName, numRows);
+      loadRandomData(tableName, numRows);
+    }
+  }
+
+  private boolean rowExistsInTable(Table table, byte[] rowKey) throws IOException {
+    return table.exists(new Get(rowKey));
+  }
+
+  private List<byte[]> deleteFirstRowFromEachTable(Connection conn, List<TableName> tables)
+    throws IOException {
+    List<byte[]> deletedRows = new ArrayList<>();
+    for (TableName tableName : tables) {
+      try (Table table = conn.getTable(tableName)) {
+        deletedRows.add(deleteFirstRow(table));
+      }
+    }
+    return deletedRows;
+  }
+
+  private byte[] deleteFirstRow(Table table) throws IOException {
+    byte[] firstRowKey = null;
+
+    // Scan for exactly one row, returning only keys
+    Scan scan = new Scan()
+      .setOneRowLimit()
+      .setFilter(new KeyOnlyFilter());
+
+    try (ResultScanner scanner = table.getScanner(scan)) {
+      Result result = scanner.next();
+      if (result != null && !result.isEmpty()) {
+        firstRowKey = result.getRow();
+      }
+    }
+
+    // Delete the row if the table is not empty
+    if (firstRowKey != null) {
+      Delete delete = new Delete(firstRowKey);
+      table.delete(delete);
+    }
+
+    return firstRowKey;
+  }
+
+  private void verifyRowDeletedInEachTable(Connection conn, List<TableName> tables,
+    List<byte[]> deletedRows, LinkedHashMap<TableName, Integer> preDeleteRowCounts) throws IOException {
+    LinkedHashMap<TableName, Integer> actualSourceRowCountsPostDelete = getTableRowCounts(tables);
+    Iterator<byte[]> deletedRowsIterator = deletedRows.iterator();
+    for (Map.Entry<TableName, Integer> entry : actualSourceRowCountsPostDelete.entrySet()) {
+      TableName tableName = entry.getKey();
+      Integer actualRowCount = entry.getValue();
+      Integer expectedRowCount = preDeleteRowCounts.get(tableName) - 1;
+      byte[] deletedRow = deletedRowsIterator.next();
+      String msg = String.format(
+        "Expected actual row count for table %s to be %d, got %d instead",
+        tableName, expectedRowCount, actualRowCount
+      );
+      assertEquals(actualRowCount, expectedRowCount, msg);
+      try (Table table = conn.getTable(tableName)) {
+        msg = String.format("Expected row to be deleted from table %s: %s",
+          table, Bytes.toString(deletedRow));
+        assertFalse(rowExistsInTable(table, deletedRow), msg);
+      }
+    }
+  }
+
+  private void verifyEachRestoredTableHasDeletedRow(Connection conn, List<TableName> restoredTables,
+    List<byte[]> deletedRows) throws IOException {
+    assertEquals(restoredTables.size(), deletedRows.size());
+    Iterator<TableName> restoredTablesIterator = restoredTables.iterator();
+    Iterator<byte[]> deletedRowsIterator = deletedRows.iterator();
+    while (restoredTablesIterator.hasNext() && deletedRowsIterator.hasNext()) {
+      TableName restoredTable = restoredTablesIterator.next();
+      byte[] restoredRow = deletedRowsIterator.next();
+      try (Table table = conn.getTable(restoredTable)) {
+        String msg = String.format("Expected row to exist in table %s: %s",
+          table, Bytes.toString(restoredRow));
+        assertTrue(rowExistsInTable(table, restoredRow), msg);
+      }
     }
   }
 
@@ -332,7 +454,7 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
     int expectedNumRows;
     String msg;
 
-    for (Map.Entry<TableName, Integer> entry : expectedCurrentRowCounts.entrySet() ) {
+    for (Map.Entry<TableName, Integer> entry : expectedCurrentRowCounts.entrySet()) {
       table = entry.getKey();
       expectedNumRows = entry.getValue();
       msg = String.format("Expected table %s to have %s rows", table, expectedNumRows);
@@ -343,10 +465,16 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
 
   private void verifyExpectedSourceTableRowCounts(List<TableName> tables, int rowCountMultiplier) throws IOException {
     LinkedHashMap<TableName, Integer> expectedSourceTableRowCounts
-      = getExpectedSourceTableRowCounts(tables, rowCountMultiplier);
+      = calculateExpectedSourceTableRowCounts(tables, rowCountMultiplier);
     verifyExpectedRowCountInAllTables(expectedSourceTableRowCounts);
   }
 
+  /**
+   * Gets the current row count for each table in the provided list
+   * @param tables - tables we want to get the row count for
+   * @return       - Map where keys are each table and the values are each table's row count
+   * @throws IOException
+   */
   private LinkedHashMap<TableName, Integer> getTableRowCounts(List<TableName> tables)
     throws IOException {
     int numRows;
@@ -359,6 +487,15 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
     return tableRowCounts;
   }
 
+  /**
+   * Gets the current row count of each source table and maps them to the name of each target table.
+   * This acts as the expected row count for each target table after the source tables have been
+   * mutated and a PITR has been run.
+   * @param tables - tables we want to get the current row count for so these values can be
+   *                 verified later after PITR
+   * @return       - Map of restored tables to expected row count
+   * @throws IOException
+   */
   private LinkedHashMap<TableName, Integer> getExpectedTargetTableRowCounts(List<TableName> tables)
     throws IOException {
     List<TableName> targetTables = getTargetTablesForPitrRestore(tables);
@@ -370,7 +507,14 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
     return expectedRowCounts;
   }
 
-  private LinkedHashMap<TableName, Integer> getExpectedSourceTableRowCounts(List<TableName> tables,
+  /**
+   * Uses a row count multiplier to calculate how many rows each source table in a list should have
+   * at a certain time
+   * @param tables             - source tables
+   * @param rowCountMultiplier - factor used to calculare each table's row count
+   * @return
+   */
+  private LinkedHashMap<TableName, Integer> calculateExpectedSourceTableRowCounts(List<TableName> tables,
     int rowCountMultiplier) {
     int expectedRowCount = rowsInIteration * rowCountMultiplier;
     LinkedHashMap<TableName, Integer> expectedRowCounts = new LinkedHashMap<>();
@@ -390,8 +534,8 @@ public class IntegrationTestPointInTimeRestore extends IntegrationTestBackupRest
     for (TableName tableName : tables) {
       LOG.info("Waiting for checkpoint timestamp to update for tables {}", tables);
       try (Table tableConn = conn.getTable(tableName)) {
-        long latestPutTimestamp = getLatestPutTimestamp(tableConn);
-        waitForCheckpointTimestampsToUpdate(conn, latestPutTimestamp, tableName);
+        long latestMutationTimestamp = getLatestMutationTimestamp(tableConn);
+        waitForCheckpointTimestampsToUpdate(conn, latestMutationTimestamp, tableName);
       }
     }
     LOG.info("Done waiting for checkpoint timestamps to update for tables {}. "

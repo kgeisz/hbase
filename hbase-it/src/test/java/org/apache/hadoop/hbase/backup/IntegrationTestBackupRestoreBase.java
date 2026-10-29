@@ -238,7 +238,7 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
 
     try (Connection conn = util.getConnection(); BackupAdmin client = new BackupAdminImpl(conn);
       Table tableConn = conn.getTable(tableName)) {
-      loadData(tableName, rowsInIteration);
+      loadRandomData(tableName, rowsInIteration);
 
       // First create a full backup for the table
       LOG.info("Creating full backup image for {} with continuous backup {}", tableName,
@@ -264,10 +264,10 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
       for (int count = 1; count <= numIterations; count++) {
         LOG.info("{} - Starting incremental backup iteration {} of {} for {}",
           Thread.currentThread().getName(), count, numIterations, tableName);
-        loadData(tableName, rowsInIteration);
+        loadRandomData(tableName, rowsInIteration);
         if (isContinuousBackupEnabled) {
-          long latestPutTimestamp = getLatestPutTimestamp(tableConn);
-          waitForCheckpointTimestampsToUpdate(conn, latestPutTimestamp, tableName);
+          long latestMutationTimestamp = getLatestMutationTimestamp(tableConn);
+          waitForCheckpointTimestampsToUpdate(conn, latestMutationTimestamp, tableName);
         }
 
         // Do incremental backup
@@ -364,7 +364,7 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
     }
   }
 
-  protected void loadData(TableName table, int numRows) throws IOException {
+  protected void loadRandomData(TableName table, int numRows) throws IOException {
     Connection conn = util.getConnection();
     // #0- insert some data to a table
     Table t1 = conn.getTable(table);
@@ -492,16 +492,16 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
    * provided timestamp threshold.
    * @param timestamps Map with ServerName and timestamp key-value pairs
    * @param threshold  Timestamp to check all timestamp values in the map against
-   * @return True if all timestamps values in the map have met or are path the timestamp threshold;
+   * @return True if all timestamps values in the map have met or are past the timestamp threshold;
    *         False otherwise
    */
   private boolean areAllTimestampsPastThreshold(Map<ServerName, Long> timestamps, long threshold,
     TableName tableName) {
     boolean haveAllTimestampsReachedThreshold = true;
     LOG.info("Checking if each region server in the replication check point "
-      + "has caught up to the latest Put on {}", tableName.getNameAsString());
+      + "has caught up to the latest mutation on {}", tableName.getNameAsString());
     for (Map.Entry<ServerName, Long> entry : timestamps.entrySet()) {
-      LOG.debug("host={}, checkpoint timestamp={}, latest put timestamp={}, caught up={}",
+      LOG.debug("host={}, checkpoint timestamp={}, latest mutation timestamp={}, caught up={}",
         entry.getKey(), entry.getValue(), threshold, entry.getValue() >= threshold);
       if (entry.getValue() < threshold) {
         // Not returning right away so all hosts and timestamps are logged
@@ -513,26 +513,27 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
 
   /**
    * Waits for the replication checkpoint timestamp of each region server to meet or pass the
-   * timestamp of the latest Put operation on the backed-up table.
-   * @param conn               Minicluster connection
-   * @param latestPutTimestamp Timestamp of the latest Put operation on the backed-up table
+   * timestamp of the latest mutation (Put or Delete) on the backed-up table.
+   * @param conn                    Minicluster connection
+   * @param latestMutationTimestamp Timestamp of the latest mutation on the backed-up table
+   * @param tableName               The backed-up table
    */
-  protected void waitForCheckpointTimestampsToUpdate(Connection conn, long latestPutTimestamp,
+  protected void waitForCheckpointTimestampsToUpdate(Connection conn, long latestMutationTimestamp,
     TableName tableName) throws IOException, InterruptedException {
     BackupSystemTable backupSystemTable = new BackupSystemTable(conn);
     Map<ServerName, Long> checkpointTimestamps = backupSystemTable.getBackupCheckpointTimestamps();
     int sleepTimeSec = 10;
     int waitThresholdMs = 15 * 60 * 1000;
     long waitStartTime = System.currentTimeMillis();
-    while (!areAllTimestampsPastThreshold(checkpointTimestamps, latestPutTimestamp, tableName)) {
+    while (!areAllTimestampsPastThreshold(checkpointTimestamps, latestMutationTimestamp, tableName)) {
       if ((System.currentTimeMillis() - waitStartTime) >= waitThresholdMs) {
         throw new RuntimeException("Timed out waiting for the replication checkpoint timestamp of "
-          + "each region server to catch up with timestamp of the latest Put on "
+          + "each region server to catch up with the timestamp of the latest mutation on "
           + tableName.getNameAsString());
       }
       LOG.info(
         "Waiting {} seconds for the replication checkpoint timestamp for each region server "
-          + "to catch up with the timestamp of the latest Put on table {}",
+          + "to catch up with the timestamp of the latest mutation on table {}",
         sleepTimeSec, tableName.getNameAsString());
       Thread.sleep(sleepTimeSec * 1000);
       checkpointTimestamps = backupSystemTable.getBackupCheckpointTimestamps();
@@ -542,13 +543,16 @@ public abstract class IntegrationTestBackupRestoreBase extends IntegrationTestBa
   }
 
   /**
-   * Scans the backed-up table and returns the timestamp (ms) of the latest Put operation on the
-   * table.
+   * Scans the backed-up table and returns the timestamp (ms) of the latest mutation (Put or Delete)
+   * on the table. Uses a raw scan to include Delete markers, which are not returned by a default
+   * scan.
    * @param table The backed-up table to scan
-   * @return Timestamp of the most recent Put on the backed-up table
+   * @return Timestamp of the most recent mutation on the backed-up table
    */
-  protected long getLatestPutTimestamp(Table table) throws IOException {
+  protected long getLatestMutationTimestamp(Table table) throws IOException {
     Scan scan = new Scan();
+    scan.setRaw(true);
+    scan.readAllVersions();
     ResultScanner resultScanner = table.getScanner(scan);
     long timestamp = 0;
     for (Result result : resultScanner) {
