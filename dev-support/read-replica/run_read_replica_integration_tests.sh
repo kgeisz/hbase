@@ -212,7 +212,32 @@ set -a
 source .env
 set +a
 
+# Copy checked-in config files to a scratch directory so that Python's
+# ElementTree (which drops XML comments) never modifies the originals.
+SCRATCH_CONF="${REPLICA_DIR}/tmp-read-replica-data/conf"
+mkdir -p "${SCRATCH_CONF}/cluster1/conf" "${SCRATCH_CONF}/cluster2/conf"
+cp -a "${ACTIVE_CLUSTER_CONF_DIR}/"* "${SCRATCH_CONF}/cluster1/conf/"
+cp -a "${REPLICA_CLUSTER_CONF_DIR}/"* "${SCRATCH_CONF}/cluster2/conf/"
+export ACTIVE_CLUSTER_CONF_DIR="${SCRATCH_CONF}/cluster1/conf"
+export REPLICA_CLUSTER_CONF_DIR="${SCRATCH_CONF}/cluster2/conf"
+
+# Derive unique container and project names from BUILD_TAG to avoid collisions
+# when master and branch-3 pipelines run on the same Jenkins agent.
+if [ -n "${BUILD_TAG}" ]; then
+  UNIQUE_SUFFIX=$(echo "${BUILD_TAG}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g')
+else
+  UNIQUE_SUFFIX="local"
+fi
+export HBASE_CONTAINER_NAME="hbase-${UNIQUE_SUFFIX}"
+export COMPOSE_PROJECT_NAME="rr-${UNIQUE_SUFFIX}"
+
+# Update hostname references in the scratch configs to match the new container names
+sed -i "s|hbase-docker-2|${HBASE_CONTAINER_NAME}-2|g" "${SCRATCH_CONF}/cluster2/conf/hbase-site.xml"
+sed -i "s|hbase-docker|${HBASE_CONTAINER_NAME}|g" "${SCRATCH_CONF}/cluster1/conf/hbase-site.xml"
+
 echo "HBASE_IMAGE=${HBASE_IMAGE}"
+echo "HBASE_CONTAINER_NAME=${HBASE_CONTAINER_NAME}"
+echo "COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}"
 echo "ACTIVE_CLUSTER_CONF_DIR=${ACTIVE_CLUSTER_CONF_DIR}"
 echo "ACTIVE_CLUSTER_LOGS_DIR=${ACTIVE_CLUSTER_LOGS_DIR}"
 echo "REPLICA_CLUSTER_CONF_DIR=${REPLICA_CLUSTER_CONF_DIR}"
