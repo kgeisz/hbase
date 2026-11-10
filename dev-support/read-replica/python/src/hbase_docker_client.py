@@ -19,6 +19,7 @@
 
 import ast
 import logging
+import os
 import re
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
@@ -589,15 +590,48 @@ class HBaseDockerClient:
         return bool(result.stdout.strip())
 
     @staticmethod
-    def set_up_data_store_dir(data_store_root: str) -> None:
+    def set_up_data_store_dir(data_store_root: str, src_dst_conf_pairs: list[tuple[str, str]]) -> None:
         command = ["mkdir", "-p", f"{data_store_root}/data-store/hbase", f"{data_store_root}/data-store/run",
-                   f"{data_store_root}/data-store/logs", f"{data_store_root}/data-store/zk"]
+                   f"{data_store_root}/data-store/logs", f"{data_store_root}/data-store/zk",
+                   f"{data_store_root}/cluster1/conf", f"{data_store_root}/cluster2/conf"]
         HBaseDockerClient.__run_subprocess_command(command,
                                                    error_msg=f"Failed to create {data_store_root} and its sub-dirs")
+
+        # Copy original conf files to the data-store directory, where they will be modified and
+        # used by the docker containers
+        for src, dst in src_dst_conf_pairs:
+            # -a preserves structure and attributes of files but not directory structure.
+            # With this, we can copy the contents of the src dir to the dst dir.
+            command = ["cp", "-a", f"{src}/.", f"{dst}/"]
+            HBaseDockerClient.__run_subprocess_command(command,
+                                                       error_msg=f"Failed to copy files in {src} to dir {dst}")
+
+        container_name = os.environ.get("HBASE_CONTAINER_NAME", "hbase-docker")
+        HBaseDockerClient._replace_hostnames_in_configs(data_store_root, container_name)
+
         command = ["chmod", "-R", "777", f"{data_store_root}"]
         HBaseDockerClient.__run_subprocess_command(command,
                                                    error_msg=f"Failed to give {data_store_root} "
                                                              f"and its sub-dirs full permissions")
+
+    @staticmethod
+    def _replace_hostnames_in_configs(data_store_root: str, container_name: str) -> None:
+        default_name = "hbase-docker"
+        if container_name == default_name:
+            return
+        conf_files = [
+            os.path.join(data_store_root, "cluster1", "conf", "hbase-site.xml"),
+            os.path.join(data_store_root, "cluster2", "conf", "hbase-site.xml"),
+        ]
+        for conf_file in conf_files:
+            with open(conf_file, "r") as f:
+                content = f.read()
+            # Replace longer string first to avoid partial match
+            content = content.replace(f"{default_name}-2", f"{container_name}-2")
+            content = content.replace(default_name, container_name)
+            with open(conf_file, "w") as f:
+                f.write(content)
+            logger.info(f"Replaced hostname references in {conf_file}")
 
     @staticmethod
     def remove_data_store_dir(data_store_root: str, sudo: bool = False) -> None:
@@ -609,9 +643,11 @@ class HBaseDockerClient:
                                                    f"Could not delete data store root: {data_store_root}")
 
     @staticmethod
-    def start_or_restart_containers(docker_compose_file: str | None = None, data_store_root: str | None = None) -> None:
+    def start_or_restart_containers(src_dst_conf_pairs: list[tuple[str, str]],
+                                    docker_compose_file: str | None = None,
+                                    data_store_root: str | None = None, ) -> None:
         if data_store_root:
-            HBaseDockerClient.set_up_data_store_dir(data_store_root)
+            HBaseDockerClient.set_up_data_store_dir(data_store_root, src_dst_conf_pairs)
 
         if HBaseDockerClient.are_containers_running(docker_compose_file):
             logger.info("Restarting docker containers")
