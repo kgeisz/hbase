@@ -82,6 +82,7 @@ class HBaseDockerClient:
                 try:
                     result = future.result(timeout=timeout)
                 except FuturesTimeoutError:
+                    self._kill_orphaned_processes(container, bash_cmd)
                     raise DockerExecCommandTimeoutError(
                         f"Command timed out after {timeout}s on {self._cluster_name} "
                         f"({self._container_name}): {bash_cmd}\n"
@@ -112,9 +113,9 @@ class HBaseDockerClient:
     def run_hbase_shell_command(self, hbase_cmd: str, timeout: int | None = None) -> str:
         """
         Uses 'docker exec' to run the provided HBase shell command in the object's Docker container.
-        The command looks like: docker exec <container> bash -c hbase shell -n <<< "<hbase_cmd>"
+        The command is piped to hbase shell via a quoted heredoc to prevent shell expansion.
         """
-        hbase_shell_cmd = f'''hbase shell -n <<< "{hbase_cmd}"'''
+        hbase_shell_cmd = f"hbase shell -n <<'HBASECMD'\n{hbase_cmd}\nHBASECMD"
         try:
             return self.run_docker_exec_command(hbase_shell_cmd, timeout=timeout)
         except DockerExecCommandTimeoutError:
@@ -123,6 +124,25 @@ class HBaseDockerClient:
             raise
         except DockerExecCommandError as e:
             raise HBaseShellCommandError(e)
+
+    def _kill_orphaned_processes(self, container, bash_cmd: str) -> None:
+        """Best-effort cleanup of hbase shell processes left behind by a timed-out exec."""
+        if "hbase shell" not in bash_cmd:
+            return
+        try:
+            logger.warning(
+                f"Killing orphaned hbase shell process on {self._cluster_name} "
+                f"({self._container_name}) after timeout"
+            )
+            container.exec_run(
+                ["bash", "-c", "pkill -9 -f 'org.jruby.Main.*shell' 2>/dev/null; true"],
+                detach=True
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to kill orphaned hbase shell process on {self._cluster_name} "
+                f"({self._container_name}): {e}"
+            )
 
     def _get_pid_from_jps(self, process_name: str) -> int | None:
         """Runs jps inside the container and returns the PID of the named process, or None."""
@@ -279,11 +299,11 @@ class HBaseDockerClient:
     def list_tables(self) -> list:
         """Gets the list of HBase tables and returns it as a Python list"""
         logger.debug(f"Getting the list of tables in HBase on {self.name}")
-        pattern = r'\[(.*?)\]'
         output = self.run_hbase_shell_command("list")
-        output = output.replace('\n', ' ')
-        match = re.search(pattern, output)
-        return ast.literal_eval(match.group(0))
+        match = re.search(r'=>\s*(\[.*?\])', output, re.DOTALL)
+        if not match:
+            return []
+        return ast.literal_eval(match.group(1))
 
     def list_regions(self, table_name: str) -> str:
         """Gets list of regions and their info for the provided table"""
