@@ -202,8 +202,6 @@ String getCronParams(String branchName) {
   if (branchName == 'master') {
     return 'H H 1-31/3 * *'
   } else if (branchName == 'branch-3') {
-    return 'H H 1-31/3 * *'
-  } else if (branchName == 'branch-2') {
     return 'H H 2-31/3 * *'
   } else {
     return 'H H 3-31/3 * *'

@@ -50,7 +50,7 @@ def log_script_end(file: str, script_logger=None, start_time=None):
 def add_common_drop_existing_tables_arg(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument('-d', '--drop-existing-tables', action='store_true',
                         help='Drop all existing tables on the active cluster and '
-                             'sync the replica cluster by the refreshing meta')
+                             'sync the replica cluster by refreshing the meta')
     return parser
 
 

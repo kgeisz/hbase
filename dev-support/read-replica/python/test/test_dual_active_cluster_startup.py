@@ -22,7 +22,7 @@ Verifies that two clusters cannot both start with read-only mode disabled (both 
 on the same shared data store. One cluster must fail to start, with the HMaster process not
 running, and an error logged to the master log.
 
-Usage: python3 ./python/scripts/test_dual_active_cluster_startup.py
+Usage: python3 ./python/test/test_dual_active_cluster_startup.py
 """
 import argparse
 import os

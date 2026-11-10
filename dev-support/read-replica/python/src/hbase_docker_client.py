@@ -177,7 +177,7 @@ class HBaseDockerClient:
                     return True
                 except DockerExecCommandError:
                     pass
-            logging.info(f"Waiting {self._sleep_time} seconds before checking Master initialization again")
+            logger.info(f"Waiting {self._sleep_time} seconds before checking Master initialization again")
             time.sleep(self._sleep_time)
 
         raise HBaseInitializationError(
@@ -202,7 +202,7 @@ class HBaseDockerClient:
                     return True
                 except DockerExecCommandError:
                     pass
-            logging.info(f"Waiting {self._sleep_time} seconds before checking RegionServer initialization again")
+            logger.info(f"Waiting {self._sleep_time} seconds before checking RegionServer initialization again")
             time.sleep(self._sleep_time)
 
         raise HBaseInitializationError(
@@ -240,7 +240,7 @@ class HBaseDockerClient:
             except HBaseShellCommandError:
                 pass
 
-            logging.info(f"Waiting {self._sleep_time} seconds before getting status on {self.name} again")
+            logger.info(f"Waiting {self._sleep_time} seconds before getting status on {self.name} again")
             time.sleep(self._sleep_time)
 
         raise HBaseInitializationError(
@@ -333,7 +333,7 @@ class HBaseDockerClient:
         if spec_map:
             scan_cmd += f", {spec_map}"
             log_msg += f" with spec_map {spec_map}"
-        logging.info(log_msg)
+        logger.info(log_msg)
         return self.run_hbase_shell_command(scan_cmd)
 
     def count(self, table_name: str, spec: str | None = None) -> str:
